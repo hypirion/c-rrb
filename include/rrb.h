@@ -19,16 +19,17 @@ typedef struct rrb_t {
 } rrb_t;
 
 rrb_t *rrb_create(void);
-void rrb_destroy(rrb_t *rrb);
+void rrb_destroy(rrb_t *restrict rrb);
 
-uint32_t rrb_count(const rrb_t *rrb);
-void *rrb_nth(const rrb_t *rrb, uint32_t pos);
-rrb_t *rrb_pop(const rrb_t* rrb);
-void *rrb_peek(const rrb_t* rrb);
-rrb_t *rrb_push(const rrb_t *rrb, void *elt);
-rrb_t *rrb_update(const rrb_t *rrb, uint32_t pos, void *elt);
+uint32_t rrb_count(const rrb_t *restrict rrb);
+void *rrb_nth(const rrb_t *restrict rrb, uint32_t pos);
+rrb_t *rrb_pop(const rrb_t *restrict rrb);
+void *rrb_peek(const rrb_t *restrict rrb);
+rrb_t *rrb_push(const rrb_t *restrict rrb, const void *restrict elt);
+rrb_t *rrb_update(const rrb_t *restrict rrb, uint32_t pos, void *restrict elt);
 
+// TODO: Is it okay to use restricted here?
 rrb_t *rrb_concat(const rrb_t *first, const rrb_t *second);
-rrb_t *rrb_slice(const rrb_t *rrb, uint32_t from, uint32_t to);
+rrb_t *rrb_slice(const rrb_t *restrict rrb, uint32_t from, uint32_t to);
 
 #endif
