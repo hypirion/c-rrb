@@ -1,5 +1,5 @@
 CC=$(shell which clang)
-INCLUDEPATH= -I include
+INCLUDEPATH=
 CFLAGS+= -std=c11 -Weverything $(COPT) ${INCLUDEPATH} -g
 OBJDIR = obj
 OBJS = $(addprefix $(OBJDIR)/, main.o rrb.o)
@@ -8,7 +8,7 @@ EXEC = bin/main
 
 .PHONY: clear purge png
 
-obj/%.o: src/%.c include/%.h
+obj/%.o: src/%.c src/%.h
 	$(CC) $(CFLAGS) -c $< -o $@
 %.png: %.dot
 	dot $*.dot -Tpng -o $@
