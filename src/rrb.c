@@ -10,9 +10,8 @@ typedef struct leaf_node_t {
 static rrb_node_t EMPTY_NODE = {.size_table = NULL,
                                 .child = (rrb_node_t *) NULL};
 
-static rrb_node_t *node_create(uint32_t children) {
-  rrb_node_t *node = calloc(1, sizeof(uint32_t *)
-                            + sizeof(rrb_node_t *) * children);
+static rrb_node_t *node_create() {
+  rrb_node_t *node = calloc(1, sizeof(rrb_node_t));
   return node;
 }
 
@@ -37,7 +36,6 @@ static void node_swap(rrb_node_t **from, rrb_node_t *to) {
 
 static rrb_node_t *node_clone(rrb_node_t *original, uint32_t shift) {
   rrb_node_t *copy = malloc(sizeof(rrb_node_t));
-  // FIXME: Breaks, need actual size here.
   memcpy(copy, original, sizeof(rrb_node_t));
   node_ref_initialize(copy);
   if (shift != 0) {
@@ -45,6 +43,12 @@ static rrb_node_t *node_clone(rrb_node_t *original, uint32_t shift) {
       node_add_ref(copy->child[i]);
     }
   }
+  return copy;
+}
+
+static uint32_t *size_table_clone(uint32_t *original) {
+  uint32_t *copy = calloc(RRB_BRANCHING, sizeof(uint32_t));
+  memcpy(copy, original, RRB_BRANCHING * sizeof(uint32_t));
   return copy;
 }
 
@@ -104,20 +108,27 @@ static rrb_node_t *node_pop(uint32_t pos, uint32_t shift, rrb_node_t *root) {
         idx++;
       }
     }
-    rrb_node_t *newchild = node_pop(pos, shift - RRB_BITS, root->child[idx]);
+    uint32_t newpos;
+    if (idx != 0) {
+      newpos = pos - root->size_table[idx - 1];
+    }
+    else {
+      newpos = pos;
+    }
+    rrb_node_t *newchild = node_pop(newpos, shift - RRB_BITS, root->child[idx]);
     if (newchild == NULL && idx == 0) {
       return NULL;
     }
     else {
       rrb_node_t *newroot = node_clone(root, shift);
+      newroot->size_table = size_table_clone(root->size_table);
+      newroot->size_table[idx]--;
       if (newchild == NULL) {
         node_unref(newroot->child[idx], shift);
         newroot->child[idx] = NULL;
-        // FIXME: patch up correct size here
       }
       else {
         node_swap(&newroot->child[idx], newchild);
-        // FIXME: patch up correct size here
       }
       return newroot;
     }
