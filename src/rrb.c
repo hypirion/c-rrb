@@ -46,9 +46,9 @@ static rrb_node_t *node_clone(rrb_node_t *original, uint32_t shift) {
   return copy;
 }
 
-static uint32_t *size_table_clone(uint32_t *original) {
-  uint32_t *copy = calloc(RRB_BRANCHING, sizeof(uint32_t));
-  memcpy(copy, original, RRB_BRANCHING * sizeof(uint32_t));
+static rrb_size_table_t *size_table_clone(rrb_size_table_t *original) {
+  rrb_size_table_t *copy = calloc(1, sizeof(rrb_size_table_t));
+  memcpy(copy, original, sizeof(rrb_size_table_t));
   return copy;
 }
 
@@ -79,15 +79,15 @@ static leaf_node_t *node_for(const rrb_t *restrict rrb, uint32_t i) {
       uint32_t idx = i >> level; // TODO: don't think we need the mask
 
       // vv TODO: I *think* this should be sufficient, not 100% sure.
-      if (node->size_table[idx] <= i) {
+      if (node->size_table->size[idx] <= i) {
         idx++;
-        if (node->size_table[idx] <= i) {
+        if (node->size_table->size[idx] <= i) {
           idx++;
         }
       }
 
       if (idx) {
-        i -= node->size_table[idx];
+        i -= node->size_table->size[idx];
       }
       node = node->child[idx];
     }
@@ -102,15 +102,15 @@ static leaf_node_t *node_for(const rrb_t *restrict rrb, uint32_t i) {
 static rrb_node_t *node_pop(uint32_t pos, uint32_t shift, rrb_node_t *root) {
   if (shift > 0) {
     uint32_t idx = pos >> shift;
-    if (root->size_table[idx] <= pos) {
+    if (root->size_table->size[idx] <= pos) {
       idx++;
-      if (root->size_table[idx] <= pos) {
+      if (root->size_table->size[idx] <= pos) {
         idx++;
       }
     }
     uint32_t newpos;
     if (idx != 0) {
-      newpos = pos - root->size_table[idx - 1];
+      newpos = pos - root->size_table->size[idx - 1];
     }
     else {
       newpos = pos;
@@ -122,7 +122,7 @@ static rrb_node_t *node_pop(uint32_t pos, uint32_t shift, rrb_node_t *root) {
     else {
       rrb_node_t *newroot = node_clone(root, shift);
       newroot->size_table = size_table_clone(root->size_table);
-      newroot->size_table[idx]--;
+      newroot->size_table->size[idx]--;
       if (newchild == NULL) {
         node_unref(newroot->child[idx], shift);
         newroot->child[idx] = NULL;
@@ -156,7 +156,7 @@ rrb_t *rrb_pop (const rrb_t *restrict rrb) {
     newrrb->cnt--;
     rrb_node_t *newroot = node_pop(newrrb->cnt, rrb->shift, rrb->root);
 
-    if (newrrb->shift > 0 && newroot->size_table[0] == newrrb->cnt) {
+    if (newrrb->shift > 0 && newroot->size_table->size[0] == newrrb->cnt) {
       node_swap(&newrrb->root, newroot->child[0]);
       node_add_ref(newroot);
       node_unref(newroot, 1);

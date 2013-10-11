@@ -7,8 +7,13 @@
 #define RRB_BRANCHING (1 << RRB_BITS)
 #define RRB_MASK (RRB_BITS - 1)
 
+// TODO: Expose these to src file only
+typedef struct rrb_size_table_t  {
+  uint32_t size[RRB_BRANCHING];
+} rrb_size_table_t;
+
 typedef struct rrb_node_t {
-  uint32_t *size_table;
+  rrb_size_table_t *size_table;
   struct rrb_node_t *child[RRB_BRANCHING];
 } rrb_node_t;
 
