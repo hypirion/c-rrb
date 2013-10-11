@@ -3,6 +3,10 @@
 #include <string.h>
 #include "rrb.h"
 
+typedef struct leaf_node_t {
+  void *child[RRB_BRANCHING];
+} leaf_node_t;
+
 static rrb_node_t EMPTY_NODE = {.size_table = NULL,
                                 .child = (rrb_node_t *) NULL};
 
@@ -25,7 +29,7 @@ uint32_t rrb_count(const rrb_t *restrict rrb) {
 }
 
 // Iffy, need to pass back the modified i somehow.
-static rrb_node_t *node_for(const rrb_t *restrict rrb, uint32_t i) {
+static leaf_node_t *node_for(const rrb_t *restrict rrb, uint32_t i) {
   if (i < rrb->cnt) {
     rrb_node_t *node = rrb->root;
     for (uint32_t level = rrb->shift; level >= RRB_BITS; level -= RRB_BITS) {
@@ -44,6 +48,7 @@ static rrb_node_t *node_for(const rrb_t *restrict rrb, uint32_t i) {
       }
       node = node->child[idx];
     }
+    return (leaf_node_t *) node;
   }
   // Index out of bounds
   else {
