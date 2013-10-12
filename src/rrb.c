@@ -3,114 +3,115 @@
 #include <string.h>
 #include "rrb.h"
 
-typedef struct leaf_node {
+typedef struct LeafNode {
   void *child[RRB_BRANCHING];
-} leaf_node;
+} LeafNode;
 
-typedef struct rrb_size_table {
+typedef struct RRBSizeTable {
   uint32_t size[RRB_BRANCHING];
-} rrb_size_table;
+} RRBSizeTable;
 
-typedef struct rrb_node {
-  rrb_size_table *size_table;
-  struct rrb_node *child[RRB_BRANCHING];
-} rrb_node;
+typedef struct RRBNode {
+  RRBSizeTable *size_table;
+  struct RRBNode *child[RRB_BRANCHING];
+} RRBNode;
 
-typedef struct real_rrb {
+typedef struct RealRRB {
   uint32_t cnt;
   uint32_t shift;
-  rrb_node *root;
-} real_rrb;
+  RRBNode *root;
+} RealRRB;
 
-static rrb_node EMPTY_NODE = {.size_table = NULL,
-                              .child = {(rrb_node *) NULL}};
+static RRBNode EMPTY_NODE = {.size_table = NULL,
+                              .child = {(RRBNode *) NULL}};
 
-static rrb_node* node_create() {
-  rrb_node *node = calloc(1, sizeof(rrb_node));
+static RRBNode* node_create() {
+  RRBNode *node = calloc(1, sizeof(RRBNode));
   return node;
 }
 
-static void node_ref_initialize(rrb_node *node) {
+static void node_ref_initialize(RRBNode *node) {
   // empty as of now
 }
 
-static void node_unref(rrb_node *node, uint32_t shift) {
+static void node_unref(RRBNode *node, uint32_t shift) {
   // empty as of now
 }
 
-static void node_ref(rrb_node *node) {
+static void node_ref(RRBNode *node) {
   // empty as of now
 }
 
-static void node_swap(rrb_node **from, rrb_node *to) {
+static void node_swap(RRBNode **from, RRBNode *to) {
   node_unref(*from, 1);
   *from = to;
   node_ref(to);
 }
 
-static rrb_node* node_clone(rrb_node *original, uint32_t shift) {
-  rrb_node *copy = malloc(sizeof(rrb_node));
-  memcpy(copy, original, sizeof(rrb_node));
+static RRBNode* node_clone(RRBNode *original) {
+  RRBNode *copy = malloc(sizeof(RRBNode));
+  memcpy(copy, original, sizeof(RRBNode));
   node_ref_initialize(copy);
   for (int i = 0; i < RRB_BRANCHING && copy->child[i] != NULL; i++) {
     node_ref(copy->child[i]);
   }
+
   return copy;
 }
 
-static void leaf_node_ref_initialize(leaf_node *node) {
+static void leaf_node_ref_initialize(LeafNode *node) {
   // empty as of now
 }
 
-static void leaf_node_unref(leaf_node *node) {
+static void leaf_node_unref(LeafNode *node) {
   // empty as of now
 }
 
-static void leaf_node_ref(leaf_node *node) {
+static void leaf_node_ref(LeafNode *node) {
   // empty as of now
 }
 
-static leaf_node* leaf_node_clone(leaf_node *original) {
-  leaf_node *copy = malloc(sizeof(leaf_node));
-  memcpy(copy, original, sizeof(leaf_node));
+static LeafNode* leaf_node_clone(LeafNode *original) {
+  LeafNode *copy = malloc(sizeof(LeafNode));
+  memcpy(copy, original, sizeof(LeafNode));
   leaf_node_ref_initialize(copy);
   return copy;
 }
 
-static rrb_size_table* size_table_clone(rrb_size_table *original) {
-  rrb_size_table *copy = calloc(1, sizeof(rrb_size_table));
-  memcpy(copy, original, sizeof(rrb_size_table));
+static RRBSizeTable* size_table_clone(RRBSizeTable *original) {
+  RRBSizeTable *copy = calloc(1, sizeof(RRBSizeTable));
+  memcpy(copy, original, sizeof(RRBSizeTable));
   return copy;
 }
 
-static real_rrb* rrb_clone(const real_rrb *restrict rrb) {
-  real_rrb *newrrb = malloc(sizeof(real_rrb));
-  memcpy(newrrb, rrb, sizeof(real_rrb));
+static RealRRB* rrb_clone(const RealRRB *restrict rrb) {
+  RealRRB *newrrb = malloc(sizeof(RealRRB));
+  memcpy(newrrb, rrb, sizeof(RealRRB));
   if (newrrb->shift == 0) {
     node_ref(rrb->root);
   }
   else {
-    leaf_node_ref((leaf_node *) rrb->root);
+    leaf_node_ref((LeafNode *) rrb->root);
   }
   return newrrb;
 }
 
-rrb_tree* rrb_create() {
+RRB* rrb_create() {
   return NULL;
 }
 
-void rrb_destroy(rrb_tree *restrict rrb) {
+void rrb_destroy(RRB *restrict rrb) {
   return;
 }
 
-uint32_t rrb_count(const rrb_tree *restrict rrb) {
+uint32_t rrb_count(const RRB *restrict rrb) {
   return rrb->cnt;
 }
 
 // Iffy, need to pass back the modified i somehow.
-static leaf_node* node_for(const real_rrb *restrict rrb, uint32_t i) {
+static LeafNode* node_for(const RealRRB *restrict rrb, uint32_t i) {
   if (i < rrb->cnt) {
-    rrb_node *node = rrb->root;
+    RRBNode *node = rrb->root;
     for (uint32_t level = rrb->shift; level >= RRB_BITS; level -= RRB_BITS) {
       uint32_t idx = i >> level; // TODO: don't think we need the mask
 
@@ -127,7 +128,7 @@ static leaf_node* node_for(const real_rrb *restrict rrb, uint32_t i) {
       }
       node = node->child[idx];
     }
-    return (leaf_node *) node;
+    return (LeafNode *) node;
   }
   // Index out of bounds
   else {
@@ -135,7 +136,7 @@ static leaf_node* node_for(const real_rrb *restrict rrb, uint32_t i) {
   }
 }
 
-static rrb_node* node_pop(uint32_t pos, uint32_t shift, rrb_node *root) {
+static RRBNode* node_pop(uint32_t pos, uint32_t shift, RRBNode *root) {
   if (shift > 0) {
     uint32_t idx = pos >> shift;
     if (root->size_table->size[idx] <= pos) {
@@ -151,12 +152,12 @@ static rrb_node* node_pop(uint32_t pos, uint32_t shift, rrb_node *root) {
     else {
       newpos = pos;
     }
-    rrb_node *newchild = node_pop(newpos, shift - RRB_BITS, root->child[idx]);
+    RRBNode *newchild = node_pop(newpos, shift - RRB_BITS, root->child[idx]);
     if (newchild == NULL && idx == 0) {
       return NULL;
     }
     else {
-      rrb_node *newroot = node_clone(root, shift);
+      RRBNode *newroot = node_clone(root);
       newroot->size_table = size_table_clone(root->size_table);
       newroot->size_table->size[idx]--;
       if (newchild == NULL) {
@@ -173,23 +174,23 @@ static rrb_node* node_pop(uint32_t pos, uint32_t shift, rrb_node *root) {
     return NULL;
   }
   else { // shift == 0
-    leaf_node *newroot = leaf_node_clone((leaf_node *) root);
+    LeafNode *newroot = leaf_node_clone((LeafNode *) root);
     newroot->child[pos] = NULL;
-    return (rrb_node *) newroot;
+    return (RRBNode *) newroot;
   }
 }
 
-rrb_tree* rrb_pop (const rrb_tree *restrict _rrb) {
-  const real_rrb *restrict rrb = (real_rrb *) _rrb;
+RRB* rrb_pop(const RRB *restrict _rrb) {
+  const RealRRB *restrict rrb = (RealRRB *) _rrb;
   switch (rrb->cnt) {
   case 0:
     return NULL;
   case 1:
     return rrb_create();
   default: {
-    real_rrb *newrrb = rrb_clone(rrb);
+    RealRRB *newrrb = rrb_clone(rrb);
     newrrb->cnt--;
-    rrb_node *newroot = node_pop(newrrb->cnt, rrb->shift, rrb->root);
+    RRBNode *newroot = node_pop(newrrb->cnt, rrb->shift, rrb->root);
 
     if (newrrb->shift > 0 && newroot->size_table->size[0] == newrrb->cnt) {
       node_swap(&newrrb->root, newroot->child[0]);
@@ -201,7 +202,7 @@ rrb_tree* rrb_pop (const rrb_tree *restrict _rrb) {
       node_swap(&newrrb->root, newroot);
     }
 
-    return (rrb_tree *) newrrb;
+    return (RRB *) newrrb;
   }
   }
 }
