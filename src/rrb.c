@@ -23,7 +23,7 @@ typedef struct real_rrb {
 } real_rrb;
 
 static rrb_node EMPTY_NODE = {.size_table = NULL,
-                             .child = (rrb_node *) NULL};
+                              .child = {(rrb_node *) NULL}};
 
 static rrb_node* node_create() {
   rrb_node *node = calloc(1, sizeof(rrb_node));
@@ -38,26 +38,42 @@ static void node_unref(rrb_node *node, uint32_t shift) {
   // empty as of now
 }
 
-static void node_add_ref(rrb_node *node) {
-  // if shift == 0, we have a leaf node
+static void node_ref(rrb_node *node) {
   // empty as of now
 }
 
 static void node_swap(rrb_node **from, rrb_node *to) {
   node_unref(*from, 1);
   *from = to;
-  node_add_ref(to);
+  node_ref(to);
 }
 
 static rrb_node* node_clone(rrb_node *original, uint32_t shift) {
   rrb_node *copy = malloc(sizeof(rrb_node));
   memcpy(copy, original, sizeof(rrb_node));
   node_ref_initialize(copy);
-  if (shift != 0) {
-    for (int i = 0; i < RRB_BRANCHING && copy->child[i] != NULL; i++) {
-      node_add_ref(copy->child[i]);
-    }
+  for (int i = 0; i < RRB_BRANCHING && copy->child[i] != NULL; i++) {
+    node_ref(copy->child[i]);
   }
+  return copy;
+}
+
+static void leaf_node_ref_initialize(leaf_node *node) {
+  // empty as of now
+}
+
+static void leaf_node_unref(leaf_node *node) {
+  // empty as of now
+}
+
+static void leaf_node_ref(leaf_node *node) {
+  // empty as of now
+}
+
+static leaf_node* leaf_node_clone(leaf_node *original) {
+  leaf_node *copy = malloc(sizeof(leaf_node));
+  memcpy(copy, original, sizeof(leaf_node));
+  leaf_node_ref_initialize(copy);
   return copy;
 }
 
@@ -70,19 +86,24 @@ static rrb_size_table* size_table_clone(rrb_size_table *original) {
 static real_rrb* rrb_clone(const real_rrb *restrict rrb) {
   real_rrb *newrrb = malloc(sizeof(real_rrb));
   memcpy(newrrb, rrb, sizeof(real_rrb));
-  // Memory referencing here.
+  if (newrrb->shift == 0) {
+    node_ref(rrb->root);
+  }
+  else {
+    leaf_node_ref((leaf_node *) rrb->root);
+  }
   return newrrb;
 }
 
-rrb* rrb_create() {
+rrb_tree* rrb_create() {
   return NULL;
 }
 
-void rrb_destroy(rrb *restrict rrb) {
+void rrb_destroy(rrb_tree *restrict rrb) {
   return;
 }
 
-uint32_t rrb_count(const rrb *restrict rrb) {
+uint32_t rrb_count(const rrb_tree *restrict rrb) {
   return rrb->cnt;
 }
 
@@ -152,15 +173,13 @@ static rrb_node* node_pop(uint32_t pos, uint32_t shift, rrb_node *root) {
     return NULL;
   }
   else { // shift == 0
-    leaf_node *newroot = malloc(sizeof(leaf_node));
-    memcpy(newroot, root, sizeof(leaf_node));
-    // TODO: Add in refcounting here
+    leaf_node *newroot = leaf_node_clone((leaf_node *) root);
     newroot->child[pos] = NULL;
     return (rrb_node *) newroot;
   }
 }
 
-rrb* rrb_pop (const rrb *restrict _rrb) {
+rrb_tree* rrb_pop (const rrb_tree *restrict _rrb) {
   const real_rrb *restrict rrb = (real_rrb *) _rrb;
   switch (rrb->cnt) {
   case 0:
@@ -174,14 +193,15 @@ rrb* rrb_pop (const rrb *restrict _rrb) {
 
     if (newrrb->shift > 0 && newroot->size_table->size[0] == newrrb->cnt) {
       node_swap(&newrrb->root, newroot->child[0]);
-      node_add_ref(newroot);
+      node_ref(newroot);
       node_unref(newroot, 1);
       newrrb->shift -= RRB_BITS;
     }
     else {
       node_swap(&newrrb->root, newroot);
     }
-    return newrrb;
+
+    return (rrb_tree *) newrrb;
   }
   }
 }
