@@ -3,6 +3,10 @@
 #include <string.h>
 #include "rrb.h"
 
+#ifdef RRB_DEBUG
+#include <stdio.h>
+#endif
+
 #define NEW_INDEX_POS(rrbnode, idx, pos) (idx == 0 ? pos : \
                                           rrbnode->size_table->size[idx-1] - pos)
 
@@ -24,8 +28,6 @@ typedef struct RealRRB {
   uint32_t shift;
   RRBNode *root;
 } RealRRB;
-
-
 
 static RRBNode EMPTY_NODE = {.size_table = NULL,
                              .child = {(RRBNode *) NULL}};
@@ -292,3 +294,62 @@ RRB* rrb_push(const RRB *restrict _rrb, const void *restrict elt) {
   }
   return (RRB *) newrrb;
 }
+
+#ifdef RRB_DEBUG
+
+// refcount not implemented yet:
+#define REFCOUNT(...)
+REFCOUNT(not, yet, used)
+
+static void rrb_node_to_dot(FILE *out, RRBNode *root, uint32_t shift);
+static void leaf_node_to_dot(FILE *out, LeafNode *root);
+static void size_table_to_dot(FILE *out, RRBSizeTable *table);
+
+void rrb_to_dot(const RRB *_rrb, char *loch) {
+  const RealRRB *rrb = (RealRRB *) _rrb;
+  FILE *out = fopen(loch, "w");
+  fprintf(out, "digraph g {\n  bgcolor=transparent\n  node [shape=record];\n");
+  fprintf(out, "  s%p [label=\"%d | %d | <root>\"];\n",
+          rrb, rrb->cnt, rrb->shift);
+  fprintf(out, "  s%p:root -> s%p;\n", rrb, rrb->root);
+  rrb_node_to_dot(out, rrb->root, rrb->shift);
+  fprintf(out, "}\n");
+  fclose(out);
+}
+
+static void rrb_node_to_dot(FILE *out, RRBNode *root, uint32_t shift) {
+  if (shift == 0) {
+    leaf_node_to_dot(out, (LeafNode *) root);
+    return;
+  }
+  fprintf(out, "  s%p [label=\"<table>", root);
+  for (int i = 0; i < RRB_BRANCHING && root->child[i] != NULL; i++) {
+    fprintf(out, " | <%d>%d", i, i);
+  }
+  fprintf(out, "\"];\n");
+  fprintf(out, "  s%p:table -> s%p\n", root, root->size_table);
+  size_table_to_dot(out, root->size_table);
+  for (int i = 0; i < RRB_BRANCHING && root->child[i] != NULL; i++) {
+    fprintf(out, "  s%p:%d -> s%p\n", root, i, root->child[i]);
+    rrb_node_to_dot(out, root->child[i], shift - RRB_BITS);
+  }
+}
+
+static void size_table_to_dot(FILE *out, RRBSizeTable *table) {
+  fprintf(out, "  s%p [color=indianred3, label=\"", table);
+  for (int i = 0; i < RRB_BRANCHING && table->size[i] != 0; i++) {
+    fprintf(out, "%s%d", i ? " | " : "", table->size[i]);
+  }
+  fprintf(out, "\"];\n");
+}
+
+static void leaf_node_to_dot(FILE *out, LeafNode *root) {
+  fprintf(out, "  s%p [color=darkolivegreen3, label=\"", root);
+  for (int i = 0; i < RRB_BRANCHING && root->child[i] != NULL; i++) {
+    uintptr_t leaf = (uintptr_t) ((void **)root->child)[i];
+    fprintf(out, "%s%lx", i ? " | " : "", leaf);
+  }
+  fprintf(out, "\"];\n");
+}
+
+#endif

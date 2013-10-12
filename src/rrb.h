@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define RRB_BITS 1
+#define RRB_BITS 2
 #define RRB_BRANCHING (1 << RRB_BITS)
 #define RRB_MASK (RRB_BITS - 1)
 
@@ -25,4 +25,9 @@ RRB* rrb_update(const RRB *restrict rrb, uint32_t pos, void *restrict elt);
 RRB* rrb_concat(const RRB *first, const RRB *second);
 RRB* rrb_slice(const RRB *restrict rrb, uint32_t from, uint32_t to);
 
+#ifdef RRB_DEBUG
+
+void rrb_to_dot(const RRB *rrb, char *loch);
+
+#endif
 #endif
