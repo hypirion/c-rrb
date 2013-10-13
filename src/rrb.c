@@ -327,7 +327,10 @@ static void rrb_node_to_dot(FILE *out, RRBNode *root, uint32_t shift) {
     fprintf(out, " | <%d>%d", i, i);
   }
   fprintf(out, "\"];\n");
-  fprintf(out, "  s%p:table -> s%p\n", root, root->size_table);
+  // Hack to get nodes at correct position
+  fprintf(out, "  s%p -> s%p [dir=back];\n", root->size_table, root);
+  // set rrb node and size table at same rank
+  fprintf(out, "  {rank=same; s%p; s%p;}\n", root, root->size_table);
   size_table_to_dot(out, root->size_table);
   for (int i = 0; i < RRB_BRANCHING && root->child[i] != NULL; i++) {
     fprintf(out, "  s%p:%d -> s%p;\n", root, i, root->child[i]);
