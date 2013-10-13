@@ -342,7 +342,7 @@ static void rrb_node_to_dot(FILE *out, RRBNode *root, uint32_t shift) {
   }
   fprintf(out, "  </tr>\n</table>>];\n");
   // Hack to get nodes at correct position
-  fprintf(out, "  s%p -> s%p [dir=back];\n", root->size_table, root);
+  fprintf(out, "  s%p:last -> s%p:table [dir=back];\n", root->size_table, root);
   // set rrb node and size table at same rank
   fprintf(out, "  {rank=same; s%p; s%p;}\n", root, root->size_table);
   size_table_to_dot(out, root->size_table);
@@ -360,7 +360,9 @@ static void size_table_to_dot(FILE *out, RRBSizeTable *table) {
           "  <tr>\n",
           table);
   for (int i = 0; i < RRB_BRANCHING && table->size[i] != 0; i++) {
-    fprintf(out, "    <td height=\"36\" width=\"25\">%d</td>\n",
+    int remaining_nodes = (i+1) < RRB_BRANCHING && table->size[i+1] != NULL;
+    fprintf(out, "    <td height=\"36\" width=\"25\" %s>%d</td>\n",
+            !remaining_nodes ? "port=\"last\"" : "",
             table->size[i]);
   }
   fprintf(out, "  </tr>\n</table>>];\n");
