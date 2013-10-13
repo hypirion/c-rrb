@@ -308,7 +308,7 @@ static void size_table_to_dot(FILE *out, RRBSizeTable *table);
 void rrb_to_dot(const RRB *_rrb, char *loch) {
   const RealRRB *rrb = (RealRRB *) _rrb;
   FILE *out = fopen(loch, "w");
-  fprintf(out, "digraph g {\n  bgcolor=transparent;\n  node [shape=none];\n");
+  fputs("digraph g {\n  bgcolor=transparent;\n  node [shape=none];\n", out);
   fprintf(out,
           "  s%p [label=<\n<table border=\"0\" cellborder=\"1\" "
           "cellspacing=\"0\" cellpadding=\"6\" align=\"center\">\n"
@@ -321,7 +321,7 @@ void rrb_to_dot(const RRB *_rrb, char *loch) {
           rrb, rrb->cnt, rrb->shift);
   fprintf(out, "  s%p:root -> s%p;\n", rrb, rrb->root);
   rrb_node_to_dot(out, rrb->root, rrb->shift);
-  fprintf(out, "}\n");
+  fputs("}\n", out);
   fclose(out);
 }
 
@@ -340,7 +340,7 @@ static void rrb_node_to_dot(FILE *out, RRBNode *root, uint32_t shift) {
     fprintf(out, "    <td height=\"36\" width=\"25\" port=\"%d\">%d</td>\n",
             i, i);
   }
-  fprintf(out, "  </tr>\n</table>>];\n");
+  fputs("  </tr>\n</table>>];\n", out);
   // Hack to get nodes at correct position
   fprintf(out, "  s%p:last -> s%p:table [dir=back];\n", root->size_table, root);
   // set rrb node and size table at same rank
@@ -365,7 +365,7 @@ static void size_table_to_dot(FILE *out, RRBSizeTable *table) {
             !remaining_nodes ? "port=\"last\"" : "",
             table->size[i]);
   }
-  fprintf(out, "  </tr>\n</table>>];\n");
+  fputs("  </tr>\n</table>>];\n", out);
 }
 
 static void leaf_node_to_dot(FILE *out, LeafNode *root) {
@@ -380,7 +380,7 @@ static void leaf_node_to_dot(FILE *out, LeafNode *root) {
     fprintf(out, "    <td height=\"36\" width=\"25\">%lx</td>\n",
             leaf);
   }
-  fprintf(out, "  </tr>\n</table>>];\n");
+  fputs("  </tr>\n</table>>];\n", out);
 }
 
 #endif
