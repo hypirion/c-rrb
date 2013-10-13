@@ -308,7 +308,7 @@ static void size_table_to_dot(FILE *out, RRBSizeTable *table);
 void rrb_to_dot(const RRB *_rrb, char *loch) {
   const RealRRB *rrb = (RealRRB *) _rrb;
   FILE *out = fopen(loch, "w");
-  fprintf(out, "digraph g {\n  bgcolor=transparent\n  node [shape=record];\n");
+  fprintf(out, "digraph g {\n  bgcolor=transparent;\n  node [shape=record];\n");
   fprintf(out, "  s%p [label=\"%d | %d | <root>\"];\n",
           rrb, rrb->cnt, rrb->shift);
   fprintf(out, "  s%p:root -> s%p;\n", rrb, rrb->root);
@@ -330,7 +330,7 @@ static void rrb_node_to_dot(FILE *out, RRBNode *root, uint32_t shift) {
   fprintf(out, "  s%p:table -> s%p\n", root, root->size_table);
   size_table_to_dot(out, root->size_table);
   for (int i = 0; i < RRB_BRANCHING && root->child[i] != NULL; i++) {
-    fprintf(out, "  s%p:%d -> s%p\n", root, i, root->child[i]);
+    fprintf(out, "  s%p:%d -> s%p;\n", root, i, root->child[i]);
     rrb_node_to_dot(out, root->child[i], shift - RRB_BITS);
   }
 }
