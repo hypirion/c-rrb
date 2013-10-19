@@ -342,7 +342,7 @@ void rrb_to_dot(const RRB *_rrb, char *loch) {
           "  </tr>\n"
           "</table>>];\n",
           rrb, rrb->cnt, rrb->shift);
-  fprintf(out, "  s%p:root -> s%p;\n", rrb, rrb->root);
+  fprintf(out, "  s%p:root -> s%p:body;\n", rrb, rrb->root);
   rrb_node_to_dot(out, rrb->root, rrb->shift);
   fputs("}\n", out);
   fclose(out);
@@ -355,7 +355,7 @@ static void rrb_node_to_dot(FILE *out, RRBNode *root, uint32_t shift) {
   }
   fprintf(out,
           "  s%p [label=<\n<table border=\"0\" cellborder=\"1\" "
-          "cellspacing=\"0\" cellpadding=\"6\" align=\"center\">\n"
+          "cellspacing=\"0\" cellpadding=\"6\" align=\"center\" port=\"body\">\n"
           "  <tr>\n"
           "    <td height=\"36\" width=\"25\" port=\"table\"></td>\n",
           root);
@@ -364,13 +364,13 @@ static void rrb_node_to_dot(FILE *out, RRBNode *root, uint32_t shift) {
             i, i);
   }
   fputs("  </tr>\n</table>>];\n", out);
-  // Hack to get nodes at correct position
+  // "Hack" to get nodes at correct position
   fprintf(out, "  s%p:last -> s%p:table [dir=back];\n", root->size_table, root);
   // set rrb node and size table at same rank
   fprintf(out, "  {rank=same; s%p; s%p;}\n", root, root->size_table);
   size_table_to_dot(out, root->size_table);
   for (int i = 0; i < RRB_BRANCHING && root->child[i] != NULL; i++) {
-    fprintf(out, "  s%p:%d -> s%p;\n", root, i, root->child[i]);
+    fprintf(out, "  s%p:%d -> s%p:body;\n", root, i, root->child[i]);
     rrb_node_to_dot(out, root->child[i], shift - RRB_BITS);
   }
 }
@@ -379,7 +379,7 @@ static void size_table_to_dot(FILE *out, RRBSizeTable *table) {
   fprintf(out,
           "  s%p [color=indianred, label=<\n"
           "<table border=\"0\" cellborder=\"1\" cellspacing=\"0\" "
-          "cellpadding=\"6\" align=\"center\">\n"
+          "cellpadding=\"6\" align=\"center\" port=\"body\">\n"
           "  <tr>\n",
           table);
   for (int i = 0; i < RRB_BRANCHING && table->size[i] != 0; i++) {
@@ -395,7 +395,7 @@ static void leaf_node_to_dot(FILE *out, LeafNode *root) {
   fprintf(out,
           "  s%p [color=darkolivegreen3, label=<\n"
           "<table border=\"0\" cellborder=\"1\" cellspacing=\"0\" "
-          "cellpadding=\"6\" align=\"center\">\n"
+          "cellpadding=\"6\" align=\"center\" port=\"body\">\n"
           "  <tr>\n",
           root);
   for (int i = 0; i < RRB_BRANCHING && root->child[i] != NULL; i++) {
