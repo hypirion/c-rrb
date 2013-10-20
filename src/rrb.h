@@ -30,9 +30,7 @@
 #define RRB_BRANCHING (1 << RRB_BITS)
 #define RRB_MASK (RRB_BITS - 1)
 
-typedef struct RRB {
-  const uint32_t cnt;
-} RRB;
+typedef struct _RRB RRB;
 
 RRB* rrb_create(void);
 void rrb_destroy(RRB *restrict rrb);

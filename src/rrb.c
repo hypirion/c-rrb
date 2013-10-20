@@ -46,11 +46,11 @@ typedef struct RRBNode {
   struct RRBNode *child[RRB_BRANCHING];
 } RRBNode;
 
-typedef struct RealRRB {
+struct _RRB {
   uint32_t cnt;
   uint32_t shift;
   RRBNode *root;
-} RealRRB;
+};
 
 static RRBNode EMPTY_NODE = {.size_table = NULL,
                              .child = {(RRBNode *) NULL}};
@@ -137,9 +137,9 @@ static void size_table_ref(RRBSizeTable *table) {
   // empty as of now
 }
 
-static RealRRB* rrb_clone(const RealRRB *restrict rrb) {
-  RealRRB *newrrb = malloc(sizeof(RealRRB));
-  memcpy(newrrb, rrb, sizeof(RealRRB));
+static RRB* rrb_clone(const RRB *restrict rrb) {
+  RRB *newrrb = malloc(sizeof(RRB));
+  memcpy(newrrb, rrb, sizeof(RRB));
   if (newrrb->shift == 0) {
     node_ref(rrb->root);
   }
@@ -162,7 +162,7 @@ uint32_t rrb_count(const RRB *restrict rrb) {
 }
 
 // Iffy, need to pass back the modified i somehow.
-static LeafNode* node_for(const RealRRB *restrict rrb, uint32_t i) {
+static LeafNode* node_for(const RRB *restrict rrb, uint32_t i) {
   if (i < rrb->cnt) {
     RRBNode *node = rrb->root;
     for (uint32_t level = rrb->shift; level >= RRB_BITS; level -= RRB_BITS) {
@@ -227,15 +227,14 @@ static RRBNode* node_pop(uint32_t pos, uint32_t shift, RRBNode *root) {
   }
 }
 
-RRB* rrb_pop(const RRB *restrict _rrb) {
-  const RealRRB *restrict rrb = (RealRRB *) _rrb;
+RRB* rrb_pop(const RRB *restrict rrb) {
   switch (rrb->cnt) {
   case 0:
     return NULL;
   case 1:
     return rrb_create();
   default: {
-    RealRRB *newrrb = rrb_clone(rrb);
+    RRB *newrrb = rrb_clone(rrb);
     newrrb->cnt--;
     RRBNode *newroot = node_pop(newrrb->cnt, rrb->shift, rrb->root);
 
@@ -295,9 +294,8 @@ static RRBNode *rrb_push_elt(uint32_t pos, uint32_t shift,
   }
 }
 
-RRB* rrb_push(const RRB *restrict _rrb, const void *restrict elt) {
-  const RealRRB *restrict rrb = (RealRRB *) _rrb;
-  RealRRB *newrrb = rrb_clone(rrb);
+RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
+  RRB *newrrb = rrb_clone(rrb);
   newrrb->cnt++;
   // overflow root check:
   if (0 /* FIXME */) {
@@ -328,8 +326,7 @@ static void rrb_node_to_dot(FILE *out, RRBNode *root, uint32_t shift);
 static void leaf_node_to_dot(FILE *out, LeafNode *root);
 static void size_table_to_dot(FILE *out, RRBSizeTable *table);
 
-void rrb_to_dot(const RRB *_rrb, char *loch) {
-  const RealRRB *rrb = (RealRRB *) _rrb;
+void rrb_to_dot(const RRB *rrb, char *loch) {
   FILE *out = fopen(loch, "w");
   fputs("digraph g {\n  bgcolor=transparent;\n  node [shape=none];\n", out);
   fprintf(out,
