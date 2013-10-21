@@ -34,6 +34,7 @@
                                           rrbnode->size_table->size[idx-1] - pos)
 
 typedef struct LeafNode {
+  uint32_t len;
   const void *child[RRB_BRANCHING];
 } LeafNode;
 
@@ -42,6 +43,7 @@ typedef struct RRBSizeTable {
 } RRBSizeTable;
 
 typedef struct RRBNode {
+  uint32_t len;
   RRBSizeTable *size_table;
   struct RRBNode *child[RRB_BRANCHING];
 } RRBNode;
