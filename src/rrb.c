@@ -304,12 +304,11 @@ static InternalNode* internal_node_new_above(InternalNode *left, InternalNode *r
 
 static InternalNode* internal_node_merge(InternalNode *left, InternalNode *centre,
                                          InternalNode *right) {
-  // If internal node is zero, its size is zero.
+  // If internal node is NULL, its size is zero.
   uint32_t left_len = (left == NULL) ? 0 : left->len - 1;
   uint32_t centre_len = (centre == NULL) ? 0 : centre->len;
   uint32_t right_len = (right == NULL) ? 0 : right->len - 1;
-  // CHECK: Above may have incorrect results. Idk yet.
-  // WHAT. WE NEED A SMALLER NODE HERE. Gahd. fuck.
+  // TODO: Above *may* have incorrect results, but seems correct.
 
   InternalNode *merged = internal_node_create(left_len + centre_len + right_len);
   if (left_len != 0) { // memcpy'ing zero elements from/to NULL is undefined.
@@ -321,7 +320,7 @@ static InternalNode* internal_node_merge(InternalNode *left, InternalNode *centr
            centre_len * sizeof(InternalNode *));
   }
   if (right_len != 0) { // and here
-    memcpy(&merged->child[left_len + centre_len], right->child,
+    memcpy(&merged->child[left_len + centre_len], &right->child[1],
            right_len * sizeof(InternalNode *));
   }
 
@@ -396,7 +395,7 @@ static RRBSizeTable* shuffle(InternalNode *all, uint32_t shift, uint32_t *top_le
     // Shuffle up remaining slot sizes
     while (i < new_len - 1) {
       table->size[i] = table->size[i+1];
-      i++; // TODO: Replace with for loop?
+      i++; // TODO: Replace with for loop
     }
     new_len--;
   }
