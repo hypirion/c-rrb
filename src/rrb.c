@@ -134,6 +134,8 @@ static void internal_node_to_dot(DotFile dot, const InternalNode *root, char pri
 static void size_table_to_dot(DotFile dot, const InternalNode *node);
 
 static void label_pointer(DotFile dot, const void *node, const char *name);
+
+static int concat_count = 0;
 #endif
 
 static RRBSizeTable* size_table_create(uint32_t size) {
@@ -167,6 +169,17 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
     return left;
   }
   else {
+#ifdef RRB_DEBUG
+    char *str = malloc(sizeof(char) * 80);
+    sprintf(str, "img/rrb_concat-%02d.dot", concat_count);
+    concat_count++;
+    DotFile dot = dot_file_create(str);
+    free(str);
+    rrb_to_dot(dot, left);
+    label_pointer(dot, left, "left");
+    rrb_to_dot(dot, right);
+    label_pointer(dot, right, "right");
+#endif
     RRB *new_rrb = rrb_mutable_create(); // ?
     InternalNode *root_candidate = concat_sub_tree(left->root, left->shift,
                                                    right->root, right->shift,
@@ -185,6 +198,11 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
                                              new_rrb->shift);
     }
     new_rrb->cnt = left->cnt + right->cnt;
+#ifdef RRB_DEBUG
+    rrb_to_dot(dot, new_rrb);
+    label_pointer(dot, new_rrb, "result");
+    dot_file_close(dot);
+#endif
     return new_rrb;
   }
 }

@@ -28,12 +28,14 @@
 
 int main() {
   int top = 40;
-  const RRB *rrb = rrb_create();
+  const RRB *rrb1 = rrb_create();
+  const RRB *rrb2 = rrb_create();
   for (int i = 0; i < top; i++) {
-    rrb = rrb_push(rrb, (uintptr_t) i);
+    rrb1 = rrb_push(rrb1, (uintptr_t) i);
+    rrb2 = rrb_push(rrb2, (uintptr_t) (i + top));
     char *str = malloc(80);
-    sprintf(str, "img/madness-%03d.dot", i);
-    rrb_to_dot_file(rrb, str);
+    sprintf(str, "img/test-%03d.dot", i);
+    rrb_to_dot_file(rrb_concat(rrb1, rrb2), str);
     free(str);
   }
 }
