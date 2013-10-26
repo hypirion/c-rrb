@@ -109,7 +109,16 @@ static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift);
 #ifdef RRB_DEBUG
 #include <stdio.h>
 
-typedef struct _DotFile DotFile;
+typedef struct {
+  uint32_t len;
+  uint32_t cap;
+  const void **elems;
+} DotArray;
+
+typedef struct _DotFile {
+  FILE *file;
+  DotArray *array;
+} DotFile;
 
 // refcount not implemented yet:
 #define REFCOUNT(...)
@@ -124,6 +133,7 @@ static void leaf_node_to_dot(DotFile dot, const LeafNode *root);
 static void internal_node_to_dot(DotFile dot, const InternalNode *root, char print_table);
 static void size_table_to_dot(DotFile dot, const InternalNode *node);
 
+static void label_pointer(DotFile dot, const void *node, const char *name);
 #endif
 
 static RRBSizeTable* size_table_create(uint32_t size) {
@@ -570,16 +580,17 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
 /******************************************************************************/
 #ifdef RRB_DEBUG
 
-typedef struct {
-  uint32_t len;
-  uint32_t cap;
-  const void **elems;
-} DotArray;
+static int null_counter = 0;
 
-struct _DotFile {
-  FILE *file;
-  DotArray *array;
-};
+static void label_pointer(DotFile dot, const void *node, const char *name) {
+  fprintf(dot.file, "  \"%s\";\n", name);
+  if (node == NULL) { // latest NIL node will be referred to.
+    fprintf(dot.file, "  \"%s\" -> s%d;\n", name, null_counter - 1);
+  }
+  else {
+    fprintf(dot.file, "  \"%s\" -> s%p;\n", name, node);
+  }
+}
 
 static char dot_file_contains(const DotFile dot, const void *elem) {
   for (uint32_t i = 0; i < dot.array->len; i++) {
@@ -698,7 +709,6 @@ static void internal_node_to_dot(DotFile dot, const InternalNode *root,
   }
 }
 
-static int null_counter = 0;
 
 static void size_table_to_dot(DotFile dot, const InternalNode *node) {
   if (!dot_file_contains(dot, node->size_table)) {
