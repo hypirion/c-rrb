@@ -42,10 +42,6 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #endif
 
-#ifdef RRB_DEBUG
-#include <stdio.h>
-#endif
-
 typedef enum {LEAF_NODE, INTERNAL_NODE} NodeType;
 
 typedef struct TreeNode {
@@ -106,6 +102,24 @@ static InternalNode* internal_node_new_above1(InternalNode *child);
 static InternalNode* internal_node_new_above(InternalNode *left, InternalNode *right);
 
 static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift);
+
+#ifdef RRB_DEBUG
+#include <stdio.h>
+
+typedef struct _DotFile DotFile;
+
+// refcount not implemented yet:
+#define REFCOUNT(...)
+REFCOUNT(not, yet, used)
+
+static DotFile dot_file_create(char *loch);
+static void dot_file_close(DotFile dot);
+
+static void rrb_to_dot(DotFile dot, const RRB *rrb);
+static void tree_node_to_dot(DotFile dot, const TreeNode *node);
+
+
+#endif
 
 static RRBSizeTable* size_table_create(uint32_t size) {
   RRBSizeTable *table = calloc(1, sizeof(RRBSizeTable)
@@ -551,18 +565,30 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
 /******************************************************************************/
 #ifdef RRB_DEBUG
 
-// refcount not implemented yet:
-#define REFCOUNT(...)
-REFCOUNT(not, yet, used)
+struct _DotFile {
+  FILE *file;
+};
 
-static void internal_node_to_dot(FILE *out, InternalNode *root, uint32_t shift);
-static void leaf_node_to_dot(FILE *out, LeafNode *root);
-static void size_table_to_dot(FILE *out, InternalNode *root);
+static DotFile dot_file_create(char *loch) {
+  FILE *file = fopen(loch, "w");
+  fprintf(file, "digraph g {\n  bgcolor=transparent;\n  node [shape=none];\n");
+  DotFile dot_file = {.file = file};
+  return dot_file;
+}
 
-void rrb_to_dot(const RRB *rrb, char *loch) {
-  FILE *out = fopen(loch, "w");
-  fputs("digraph g {\n  bgcolor=transparent;\n  node [shape=none];\n", out);
-  fprintf(out,
+static void dot_file_close(DotFile out) {
+  fprintf(out.file, "}\n");
+  fclose(out.file);
+}
+
+void rrb_to_dot_file(const RRB *rrb, char *loch) {
+  DotFile dot = dot_file_create(loch);
+  rrb_to_dot(dot, rrb);
+  dot_file_close(dot);
+}
+
+static void rrb_to_dot(DotFile dot, const RRB *rrb) {
+  fprintf(dot.file,
           "  s%p [label=<\n<table border=\"0\" cellborder=\"1\" "
           "cellspacing=\"0\" cellpadding=\"6\" align=\"center\">\n"
           "  <tr>\n"
@@ -572,48 +598,59 @@ void rrb_to_dot(const RRB *rrb, char *loch) {
           "  </tr>\n"
           "</table>>];\n",
           rrb, rrb->cnt, rrb->shift);
-  fprintf(out, "  s%p:root -> s%p:body;\n", rrb, rrb->root);
-  internal_node_to_dot(out, (InternalNode *) rrb->root, rrb->shift);
-  fputs("}\n", out);
-  fclose(out);
+  fprintf(dot.file, "  s%p:root -> s%p:body;\n", rrb, rrb->root);
+  tree_node_to_dot(dot, rrb->root);
 }
 
-static void internal_node_to_dot(FILE *out, InternalNode *root, uint32_t shift) {
-  if (shift <= RRB_BRANCHING) {
-    leaf_node_to_dot(out, (LeafNode *) root);
+static void leaf_node_to_dot(DotFile dot, const LeafNode *root);
+static void internal_node_to_dot(DotFile dot, const InternalNode *root);
+static void size_table_to_dot(DotFile dot, const InternalNode *node);
+
+static void tree_node_to_dot(DotFile dot, const TreeNode *root) {
+  switch (root->type) {
+  case LEAF_NODE:
+    leaf_node_to_dot(dot, (const LeafNode *) root);
+    return;
+  case INTERNAL_NODE:
+    internal_node_to_dot(dot, (const InternalNode *) root);
     return;
   }
-  fprintf(out,
+}
+
+static void internal_node_to_dot(DotFile dot, const InternalNode *root) {
+  fprintf(dot.file,
           "  s%p [label=<\n<table border=\"0\" cellborder=\"1\" "
           "cellspacing=\"0\" cellpadding=\"6\" align=\"center\" port=\"body\">\n"
           "  <tr>\n"
           "    <td height=\"36\" width=\"25\" port=\"table\"></td>\n",
           root);
   for (uint32_t i = 0; i < root->len; i++) {
-    fprintf(out, "    <td height=\"36\" width=\"25\" port=\"%d\">%d</td>\n",
+    fprintf(dot.file, "    <td height=\"36\" width=\"25\" port=\"%d\">%d</td>\n",
             i, i);
   }
-  fputs("  </tr>\n</table>>];\n", out);
+  fprintf(dot.file, "  </tr>\n</table>>];\n");
   // "Hack" to get nodes at correct position
-  fprintf(out, "  s%p:last -> s%p:table [dir=back];\n", root->size_table, root);
+  fprintf(dot.file, "  s%p:last -> s%p:table [dir=back];\n",
+          root->size_table, root);
   // set rrb node and size table at same rank
-  fprintf(out, "  {rank=same; s%p; s%p;}\n", root, root->size_table);
-  size_table_to_dot(out, root);
+  fprintf(dot.file, "  {rank=same; s%p; s%p;}\n", root, root->size_table);
+  size_table_to_dot(dot, root);
   for (uint32_t i = 0; i < root->len; i++) {
-    fprintf(out, "  s%p:%d -> s%p:body;\n", root, i, root->child[i]);
-    internal_node_to_dot(out, root->child[i], shift / RRB_BRANCHING);
+    fprintf(dot.file, "  s%p:%d -> s%p:body;\n", root, i, root->child[i]);
+    tree_node_to_dot(dot, (TreeNode *) root->child[i]);
   }
 }
 
 static int null_counter = 0;
 
-static void size_table_to_dot(FILE *out, InternalNode *node) {
+static void size_table_to_dot(DotFile dot, const InternalNode *node) {
   RRBSizeTable *table = node->size_table;
   if (table == NULL) {
-    fprintf(out, "  s%d [color=indianred, label=\"NIL\"];\n", null_counter++);
+    fprintf(dot.file, "  s%d [color=indianred, label=\"NIL\"];\n",
+            null_counter++);
     return;
   }
-  fprintf(out,
+  fprintf(dot.file,
           "  s%p [color=indianred, label=<\n"
           "<table border=\"0\" cellborder=\"1\" cellspacing=\"0\" "
           "cellpadding=\"6\" align=\"center\" port=\"body\">\n"
@@ -621,15 +658,15 @@ static void size_table_to_dot(FILE *out, InternalNode *node) {
           table);
   for (uint32_t i = 0; i < node->len; i++) {
     int remaining_nodes = (i+1) < node->len;
-    fprintf(out, "    <td height=\"36\" width=\"25\" %s>%d</td>\n",
+    fprintf(dot.file, "    <td height=\"36\" width=\"25\" %s>%d</td>\n",
             !remaining_nodes ? "port=\"last\"" : "",
             table->size[i]);
   }
-  fputs("  </tr>\n</table>>];\n", out);
+  fprintf(dot.file, "  </tr>\n</table>>];\n");
 }
 
-static void leaf_node_to_dot(FILE *out, LeafNode *root) {
-  fprintf(out,
+static void leaf_node_to_dot(DotFile dot, const LeafNode *root) {
+  fprintf(dot.file,
           "  s%p [color=darkolivegreen3, label=<\n"
           "<table border=\"0\" cellborder=\"1\" cellspacing=\"0\" "
           "cellpadding=\"6\" align=\"center\" port=\"body\">\n"
@@ -637,9 +674,9 @@ static void leaf_node_to_dot(FILE *out, LeafNode *root) {
           root);
   for (uint32_t i = 0; i < root->len; i++) {
     uintptr_t leaf = (uintptr_t) root->child[i];
-    fprintf(out, "    <td height=\"36\" width=\"25\">%lx</td>\n",
+    fprintf(dot.file, "    <td height=\"36\" width=\"25\">%lx</td>\n",
             leaf);
   }
-  fputs("  </tr>\n</table>>];\n", out);
+  fprintf(dot.file, "  </tr>\n</table>>];\n");
 }
 #endif

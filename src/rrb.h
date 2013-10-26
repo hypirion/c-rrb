@@ -50,7 +50,7 @@ const RRB* rrb_slice(const RRB *restrict rrb, uint32_t from, uint32_t to);
 
 #ifdef RRB_DEBUG
 
-void rrb_to_dot(const RRB *rrb, char *loch);
+void rrb_to_dot_file(const RRB *rrb, char *loch);
 
 #endif
 #endif

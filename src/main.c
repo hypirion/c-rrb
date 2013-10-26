@@ -33,7 +33,7 @@ int main() {
     rrb = rrb_push(rrb, (uintptr_t) i);
     char *str = malloc(80);
     sprintf(str, "img/madness-%03d.dot", i);
-    rrb_to_dot(rrb, str);
+    rrb_to_dot_file(rrb, str);
     free(str);
   }
 }
