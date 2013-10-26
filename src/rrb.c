@@ -84,7 +84,8 @@ static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
                                InternalNode *right, uint32_t shift,
                                char is_top);
 static RRBSizeTable* shuffle(InternalNode *all, uint32_t shift, uint32_t *tlen);
-static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes, uint32_t slen, uint32_t shift);
+static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
+                                 uint32_t slen, uint32_t shift);
 static uint32_t find_shift(TreeNode *node);
 static InternalNode* set_sizes(InternalNode *node, uint32_t shift);
 static uint32_t size_slot(TreeNode *node, uint32_t shift);
@@ -96,8 +97,10 @@ static LeafNode* leaf_node_merge(LeafNode *left_leaf, LeafNode *right_leaf);
 
 static InternalNode* internal_node_create(uint32_t len);
 static InternalNode* internal_node_clone(const InternalNode *original);
-static InternalNode* internal_node_merge(InternalNode *left, InternalNode *centre, InternalNode *right);
-static InternalNode* internal_node_copy(InternalNode *original, uint32_t start, uint32_t len);
+static InternalNode* internal_node_merge(InternalNode *left, InternalNode *centre,
+                                         InternalNode *right);
+static InternalNode* internal_node_copy(InternalNode *original, uint32_t start,
+                                        uint32_t len);
 static InternalNode* internal_node_new_above1(InternalNode *child);
 static InternalNode* internal_node_new_above(InternalNode *left, InternalNode *right);
 
@@ -116,9 +119,9 @@ static DotFile dot_file_create(char *loch);
 static void dot_file_close(DotFile dot);
 
 static void rrb_to_dot(DotFile dot, const RRB *rrb);
-static void tree_node_to_dot(DotFile dot, const TreeNode *node);
+static void tree_node_to_dot(DotFile dot, const TreeNode *node, char print_table);
 static void leaf_node_to_dot(DotFile dot, const LeafNode *root);
-static void internal_node_to_dot(DotFile dot, const InternalNode *root);
+static void internal_node_to_dot(DotFile dot, const InternalNode *root, char print_table);
 static void size_table_to_dot(DotFile dot, const InternalNode *node);
 
 #endif
@@ -638,22 +641,28 @@ static void rrb_to_dot(DotFile dot, const RRB *rrb) {
             "</table>>];\n",
             rrb, rrb->cnt, rrb->shift);
     fprintf(dot.file, "  s%p:root -> s%p:body;\n", rrb, rrb->root);
-    tree_node_to_dot(dot, rrb->root);
+    tree_node_to_dot(dot, rrb->root, true);
   }
 }
 
-static void tree_node_to_dot(DotFile dot, const TreeNode *root) {
+static void tree_node_to_dot(DotFile dot, const TreeNode *root, char print_table) {
+  if (root == NULL) {
+    fprintf(dot.file, "  s%d [label=\"NIL\"];\n",
+            null_counter++);
+    return;
+  }
   switch (root->type) {
   case LEAF_NODE:
     leaf_node_to_dot(dot, (const LeafNode *) root);
     return;
   case INTERNAL_NODE:
-    internal_node_to_dot(dot, (const InternalNode *) root);
+    internal_node_to_dot(dot, (const InternalNode *) root, print_table);
     return;
   }
 }
 
-static void internal_node_to_dot(DotFile dot, const InternalNode *root) {
+static void internal_node_to_dot(DotFile dot, const InternalNode *root,
+                                 char print_table) {
   if (!dot_file_contains(dot, root)) {
     dot_file_add(dot, root);
     fprintf(dot.file,
@@ -668,19 +677,23 @@ static void internal_node_to_dot(DotFile dot, const InternalNode *root) {
     }
     fprintf(dot.file, "  </tr>\n</table>>];\n");
 
-    // "Hack" to get nodes at correct position
-    fprintf(dot.file, "  s%p:last -> s%p:table [dir=back];\n",
-            root->size_table, root);
 
-    // Only do if size table isn't already placed
-    // set rrb node and size table at same rank
-    if (!dot_file_contains(dot, root->size_table)) {
-      fprintf(dot.file, "  {rank=same; s%p; s%p;}\n", root, root->size_table);
-      size_table_to_dot(dot, root);
+    if (print_table) {
+      // "Hack" to get nodes at correct position
+      fprintf(dot.file, "  s%p:last -> s%p:table [dir=back];\n",
+              root->size_table, root);
+
+      // Only do if size table isn't already placed
+      // set rrb node and size table at same rank
+      if (!dot_file_contains(dot, root->size_table)) {
+        fprintf(dot.file, "  {rank=same; s%p; s%p;}\n", root, root->size_table);
+        size_table_to_dot(dot, root);
+      }
     }
+
     for (uint32_t i = 0; i < root->len; i++) {
       fprintf(dot.file, "  s%p:%d -> s%p:body;\n", root, i, root->child[i]);
-      tree_node_to_dot(dot, (TreeNode *) root->child[i]);
+      tree_node_to_dot(dot, (TreeNode *) root->child[i], print_table);
     }
   }
 }
