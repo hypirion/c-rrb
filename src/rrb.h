@@ -32,19 +32,19 @@
 
 typedef struct _RRB RRB;
 
-RRB* rrb_create(void);
+const RRB* rrb_create(void);
 void rrb_destroy(RRB *restrict rrb);
 
 uint32_t rrb_count(const RRB *restrict rrb);
-void* rrb_nth(const RRB *restrict rrb, uint32_t pos);
-RRB* rrb_pop(const RRB *restrict rrb);
+void* rrb_nth(const RRB *restrict rrb, const uint32_t pos);
+const RRB* rrb_pop(const RRB *restrict rrb);
 void* rrb_peek(const RRB *restrict rrb);
-RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt);
-RRB* rrb_update(const RRB *restrict rrb, uint32_t pos, void *restrict elt);
+const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt);
+const RRB* rrb_update(const RRB *restrict rrb, uint32_t pos, void *restrict elt);
 
 // TODO: Is it okay to use restrict here?
-RRB* rrb_concat(const RRB *first, const RRB *second);
-RRB* rrb_slice(const RRB *restrict rrb, uint32_t from, uint32_t to);
+const RRB* rrb_concat(const RRB *first, const RRB *second);
+const RRB* rrb_slice(const RRB *restrict rrb, uint32_t from, uint32_t to);
 
 #ifdef RRB_DEBUG
 
