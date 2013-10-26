@@ -22,9 +22,18 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "main.h"
 #include "rrb.h"
 
 int main() {
-  printf("Hello, world!\n");
+  int top = 40;
+  const RRB *rrb = rrb_create();
+  for (int i = 0; i < top; i++) {
+    rrb = rrb_push(rrb, (uintptr_t) i);
+    char *str = malloc(80);
+    sprintf(str, "img/madness-%03d.dot", i);
+    rrb_to_dot(rrb, str);
+    free(str);
+  }
 }
