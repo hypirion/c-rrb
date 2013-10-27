@@ -592,6 +592,10 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
   return rrb_concat(rrb, right);
 }
 
+uint32_t rrb_count(const RRB *rrb) {
+  return rrb->cnt;
+}
+
 /******************************************************************************/
 /*                    DEBUGGING AND VISUALIZATION METHODS                     */
 /******************************************************************************/
