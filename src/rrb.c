@@ -285,7 +285,7 @@ static InternalNode* internal_node_create(uint32_t len) {
                               + len * sizeof(InternalNode *));
   node->type = INTERNAL_NODE;
   node->len = len;
-  // well... no size table for us, I suppose?
+  node->size_table = NULL;
   return node;
 }
 
