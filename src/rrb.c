@@ -778,16 +778,25 @@ static void internal_node_to_dot(DotFile dot, const InternalNode *root,
 
 
     if (print_table) {
-      // "Hack" to get nodes at correct position
-      fprintf(dot.file, "  s%p:last -> s%p:table [dir=back];\n",
-              root->size_table, root);
+      if (root->size_table == NULL) {
+        size_table_to_dot(dot, root);
+        fprintf(dot.file, "  {rank=same; s%p; s%d;}\n", root, null_counter - 1);
+        fprintf(dot.file, "  s%d -> s%p:table [dir=back];\n",
+                null_counter - 1, root);
+      }
+      else if (!dot_file_contains(dot, root->size_table)) {
+        // Only do if size table isn't already placed
+        // set rrb node and size table at same rank
 
-      // Only do if size table isn't already placed
-      // set rrb node and size table at same rank
-      if (!dot_file_contains(dot, root->size_table)) {
         fprintf(dot.file, "  {rank=same; s%p; s%p;}\n", root, root->size_table);
         size_table_to_dot(dot, root);
       }
+      if (root->size_table != NULL) {
+        // "Hack" to get nodes at correct position
+        fprintf(dot.file, "  s%p:last -> s%p:table [dir=back];\n",
+                root->size_table, root);
+      }
+
     }
 
     for (uint32_t i = 0; i < root->len; i++) {
@@ -799,14 +808,14 @@ static void internal_node_to_dot(DotFile dot, const InternalNode *root,
 
 
 static void size_table_to_dot(DotFile dot, const InternalNode *node) {
+  if (node->size_table == NULL) {
+    fprintf(dot.file, "  s%d [color=indianred, label=\"NIL\"];\n",
+            null_counter++);
+    return;
+  }
   if (!dot_file_contains(dot, node->size_table)) {
     dot_file_add(dot, node->size_table);
     RRBSizeTable *table = node->size_table;
-    if (table == NULL) {
-      fprintf(dot.file, "  s%d [color=indianred, label=\"NIL\"];\n",
-              null_counter++);
-      return;
-    }
     fprintf(dot.file,
             "  s%p [color=indianred, label=<\n"
             "<table border=\"0\" cellborder=\"1\" cellspacing=\"0\" "
