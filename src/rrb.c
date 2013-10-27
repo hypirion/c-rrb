@@ -659,6 +659,10 @@ uint32_t rrb_count(const RRB *rrb) {
   return rrb->cnt;
 }
 
+void* rrb_peek(const RRB *rrb) {
+  return rrb_nth(rrb, rrb->cnt - 1);
+}
+
 /******************************************************************************/
 /*                    DEBUGGING AND VISUALIZATION METHODS                     */
 /******************************************************************************/
