@@ -28,7 +28,7 @@
 
 #define RRB_BITS 2
 #define RRB_BRANCHING (1 << RRB_BITS)
-#define RRB_MASK (RRB_BITS - 1)
+#define RRB_MASK (RRB_BRANCHING - 1)
 #define RRB_INVARIANT 1
 #define RRB_EXTRAS 0
 
