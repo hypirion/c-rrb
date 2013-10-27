@@ -603,46 +603,52 @@ static const InternalNode* sized(const InternalNode *node, uint32_t *index,
   return (InternalNode *) node->child[is];
 }
 
-
 void* rrb_nth(const RRB *rrb, uint32_t index) {
   if (index >= rrb->cnt) {
     return NULL;
   }
   else {
     const InternalNode *current = (const InternalNode *) rrb->root;
-    switch (rrb->shift) { // FIXME: Doesn't work well if we change RRB_BITS.
-      // Should create an unroll macro to handle this
+    switch (rrb->shift) { // Doesn't work well if we change RRB_BITS
+      // Need to find a way to automatically unroll stuff.
+    case 1 << (RRB_BITS * 7): // remove later
+      if (current->size_table == NULL) {
+        current = current->child[(index >> (RRB_BITS * 5)) & RRB_MASK];
+      }
+      else {
+        current = sized(current, &index, RRB_BITS * 5);
+      }
     case 1 << (RRB_BITS * 6):
       if (current->size_table == NULL) {
-        current = current->child[((index >> (RRB_BITS * 5)) & RRB_MASK) + 1];
+        current = current->child[(index >> (RRB_BITS * 5)) & RRB_MASK];
       }
       else {
         current = sized(current, &index, RRB_BITS * 5);
       }
     case 1 << (RRB_BITS * 5):
       if (current->size_table == NULL) {
-        current = current->child[((index >> (RRB_BITS * 4)) & RRB_MASK) + 1];
+        current = current->child[(index >> (RRB_BITS * 4)) & RRB_MASK];
       }
       else {
         current = sized(current, &index, RRB_BITS * 4);
       }
     case 1 << (RRB_BITS * 4):
       if (current->size_table == NULL) {
-        current = current->child[((index >> (RRB_BITS * 3)) & RRB_MASK) + 1];
+        current = current->child[(index >> (RRB_BITS * 3)) & RRB_MASK];
       }
       else {
         current = sized(current, &index, RRB_BITS * 3);
       }
     case 1 << (RRB_BITS * 3):
       if (current->size_table == NULL) {
-        current = current->child[((index >> (RRB_BITS * 2)) & RRB_MASK) + 1];
+        current = current->child[(index >> (RRB_BITS * 2)) & RRB_MASK];
       }
       else {
         current = sized(current, &index, RRB_BITS * 2);
       }
     case 1 << (RRB_BITS * 2):
       if (current->size_table == NULL) {
-        current = current->child[((index >> (RRB_BITS * 1)) & RRB_MASK) + 1];
+        current = current->child[(index >> (RRB_BITS * 1)) & RRB_MASK];
       }
       else {
         current = sized(current, &index, RRB_BITS * 1);
