@@ -171,7 +171,7 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
   else {
 #ifdef RRB_DEBUG
     char *str = malloc(sizeof(char) * 80);
-    sprintf(str, "img/rrb_concat-%02d.dot", concat_count);
+    sprintf(str, "img/rrb_concat-%03d.dot", concat_count);
     concat_count++;
     DotFile dot = dot_file_create(str);
     free(str);

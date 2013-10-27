@@ -33,9 +33,14 @@ int main() {
   for (int i = 0; i < top; i++) {
     rrb1 = rrb_push(rrb1, (uintptr_t) i);
     rrb2 = rrb_push(rrb2, (uintptr_t) (i + top));
-    char *str = malloc(80);
+    char str[80];
     sprintf(str, "img/test-%03d.dot", i);
-    rrb_to_dot_file(rrb_concat(rrb1, rrb2), str);
-    free(str);
+    const RRB* catted = rrb_concat(rrb1, rrb2);
+    rrb_to_dot_file(catted, str);
+    printf("img/test-%03d.dot\n", i);
+    for (uint32_t j = 0; j < rrb_count(catted); j++) {
+      printf("%lx ", (uintptr_t) rrb_nth(catted, j));
+    }
+    puts("\n");
   }
 }
