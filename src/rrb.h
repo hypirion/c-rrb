@@ -46,7 +46,7 @@ const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restr
 
 // Not ok to use restrict here (potential refcount issues)
 const RRB* rrb_concat(const RRB *first, const RRB *second);
-const RRB* rrb_slice(const RRB *restrict rrb, uint32_t from, uint32_t to);
+const RRB* rrb_slice(const RRB *rrb, uint32_t from, uint32_t to);
 
 #ifdef RRB_DEBUG
 
