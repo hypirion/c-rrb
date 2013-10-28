@@ -42,7 +42,7 @@ void* rrb_nth(const RRB *rrb, uint32_t index);
 const RRB* rrb_pop(const RRB *rrb);
 void* rrb_peek(const RRB *rrb);
 const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt);
-const RRB* rrb_update(const RRB *restrict rrb, uint32_t pos, void *restrict elt);
+const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restrict elt);
 
 // Not ok to use restrict here (potential refcount issues)
 const RRB* rrb_concat(const RRB *first, const RRB *second);

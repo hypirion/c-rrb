@@ -91,7 +91,12 @@ static InternalNode* set_sizes(InternalNode *node, uint32_t shift);
 static uint32_t size_slot(TreeNode *node, uint32_t shift);
 static uint32_t size_to_shift(uint32_t size); // TODO: optimize away?
 static uint32_t size_sub_trie(TreeNode *node, uint32_t shift);
+static uint32_t sized_pos(const InternalNode *node, uint32_t *index,
+                          uint32_t sp);
+static const InternalNode* sized(const InternalNode *node, uint32_t *index,
+                                 uint32_t sp);
 
+static LeafNode* leaf_node_clone(LeafNode *original);
 static LeafNode* leaf_node_create(uint32_t size);
 static LeafNode* leaf_node_merge(LeafNode *left_leaf, LeafNode *right_leaf);
 
@@ -105,6 +110,7 @@ static InternalNode* internal_node_new_above1(InternalNode *child);
 static InternalNode* internal_node_new_above(InternalNode *left, InternalNode *right);
 
 static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift);
+static RRB* rrb_head_clone(const RRB* original);
 
 #ifdef RRB_DEBUG
 #include <stdio.h>
@@ -140,6 +146,12 @@ static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift) {
   rrb->cnt = size;
   rrb->shift = shift;
   return rrb;
+}
+
+static RRB* rrb_head_clone(const RRB* original) {
+  RRB *clone = malloc(sizeof(RRB));
+  memcpy(clone, original, sizeof(RRB));
+  return clone;
 }
 
 const RRB* rrb_create() {
@@ -255,6 +267,13 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
   }
 }
 
+static LeafNode* leaf_node_clone(LeafNode *original) {
+  size_t size = sizeof(LeafNode) + original->len * sizeof(void *);
+  LeafNode *clone = malloc(size);
+  memcpy(clone, original, size);
+  return clone;
+}
+
 static LeafNode* leaf_node_create(uint32_t len) {
   LeafNode *node = malloc(sizeof(LeafNode) + len * sizeof(void *));
   node->type = LEAF_NODE;
@@ -315,6 +334,13 @@ static InternalNode* internal_node_merge(InternalNode *left, InternalNode *centr
   }
 
   return merged;
+}
+
+static InternalNode* internal_node_clone(const InternalNode *original) {
+  size_t size = sizeof(InternalNode) + original->len * sizeof(InternalNode *);
+  InternalNode *clone = malloc(size);
+  memcpy(clone, original, size);
+  return clone;
 }
 
 static InternalNode* internal_node_copy(InternalNode *original, uint32_t start,
@@ -582,14 +608,20 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
   return rrb_concat(rrb, right);
 }
 
-static const InternalNode* sized(const InternalNode *node, uint32_t *index,
-                             uint32_t sp) {
+static uint32_t sized_pos(const InternalNode *node, uint32_t *index,
+                          uint32_t sp) {
   RRBSizeTable *table = node->size_table;
   uint32_t is = *index >> sp;
   while (table->size[is] <= *index) {
     is++;
   }
   *index = *index - ((is == 0) ? 0 : table->size[is-1]);
+  return is;
+}
+
+static const InternalNode* sized(const InternalNode *node, uint32_t *index,
+                                 uint32_t sp) {
+  uint32_t is = sized_pos(node, index, sp);
   return (InternalNode *) node->child[is];
 }
 
@@ -657,6 +689,86 @@ uint32_t rrb_count(const RRB *rrb) {
 
 void* rrb_peek(const RRB *rrb) {
   return rrb_nth(rrb, rrb->cnt - 1);
+}
+
+const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restrict elt) {
+  if (index < rrb->cnt) {
+    RRB *new_rrb = rrb_head_clone(rrb);
+    InternalNode **previous_pointer = (InternalNode **) &new_rrb->root;
+    InternalNode *current = (InternalNode *) rrb->root;
+    LeafNode *leaf;
+    uint32_t child_index;
+    switch (rrb->shift) { // Doesn't work well if we change RRB_BITS
+      // Need to find a way to automatically unroll stuff.
+      // CHECK: Cache issues wrt. program cache. This may be faster if it's rerolled.
+    case 1 << (RRB_BITS * 6):
+      current = internal_node_clone(current);
+      *previous_pointer = current;
+      if (current->size_table == NULL) {
+        child_index = (index >> (RRB_BITS * 5)) & RRB_MASK;
+      }
+      else {
+        child_index = sized_pos(current, &index, RRB_BITS * 5);
+      }
+      previous_pointer = &current->child[child_index];
+      current = current->child[child_index];
+    case 1 << (RRB_BITS * 5):
+      current = internal_node_clone(current);
+      *previous_pointer = current;
+      if (current->size_table == NULL) {
+        child_index = (index >> (RRB_BITS * 4)) & RRB_MASK;
+      }
+      else {
+        child_index = sized_pos(current, &index, RRB_BITS * 4);
+      }
+      previous_pointer = &current->child[child_index];
+      current = current->child[child_index];
+    case 1 << (RRB_BITS * 4):
+      current = internal_node_clone(current);
+      *previous_pointer = current;
+      if (current->size_table == NULL) {
+        child_index = (index >> (RRB_BITS * 3)) & RRB_MASK;
+      }
+      else {
+        child_index = sized_pos(current, &index, RRB_BITS * 3);
+      }
+      previous_pointer = &current->child[child_index];
+      current = current->child[child_index];
+    case 1 << (RRB_BITS * 3):
+      current = internal_node_clone(current);
+      *previous_pointer = current;
+      if (current->size_table == NULL) {
+        child_index = (index >> (RRB_BITS * 2)) & RRB_MASK;
+      }
+      else {
+        child_index = sized_pos(current, &index, RRB_BITS * 2);
+      }
+      previous_pointer = &current->child[child_index];
+      current = current->child[child_index];
+    case 1 << (RRB_BITS * 2):
+      current = internal_node_clone(current);
+      *previous_pointer = current;
+      if (current->size_table == NULL) {
+        child_index = (index >> (RRB_BITS * 1)) & RRB_MASK;
+      }
+      else {
+        child_index = sized_pos(current, &index, RRB_BITS * 1);
+      }
+      previous_pointer = &current->child[child_index];
+      current = current->child[child_index];
+    case 1 << (RRB_BITS * 1):
+      leaf = (LeafNode *) current;
+      leaf = leaf_node_clone(leaf);
+      *previous_pointer = (InternalNode *) leaf;
+      leaf->child[index & RRB_MASK] = elt;
+      return new_rrb;
+    default:
+      return NULL;
+    }
+  }
+  else {
+    return NULL;
+  }
 }
 
 /******************************************************************************/
