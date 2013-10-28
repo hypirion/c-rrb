@@ -109,31 +109,21 @@ static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift);
 #ifdef RRB_DEBUG
 #include <stdio.h>
 
-typedef struct {
+struct _DotArray {
   uint32_t len;
   uint32_t cap;
   const void **elems;
-} DotArray;
-
-typedef struct _DotFile {
-  FILE *file;
-  DotArray *array;
-} DotFile;
+};
 
 // refcount not implemented yet:
 #define REFCOUNT(...)
 REFCOUNT(not, yet, used)
 
-static DotFile dot_file_create(char *loch);
-static void dot_file_close(DotFile dot);
-
-static void rrb_to_dot(DotFile dot, const RRB *rrb);
 static void tree_node_to_dot(DotFile dot, const TreeNode *node, char print_table);
 static void leaf_node_to_dot(DotFile dot, const LeafNode *root);
 static void internal_node_to_dot(DotFile dot, const InternalNode *root, char print_table);
 static void size_table_to_dot(DotFile dot, const InternalNode *node);
 
-static void label_pointer(DotFile dot, const void *node, const char *name);
 
 static int concat_count = 0;
 #endif
@@ -676,7 +666,7 @@ void* rrb_peek(const RRB *rrb) {
 
 static int null_counter = 0;
 
-static void label_pointer(DotFile dot, const void *node, const char *name) {
+void label_pointer(DotFile dot, const void *node, const char *name) {
   fprintf(dot.file, "  \"%s\";\n", name);
   if (node == NULL) { // latest NIL node will be referred to.
     fprintf(dot.file, "  \"%s\" -> s%d;\n", name, null_counter - 1);
@@ -708,7 +698,7 @@ static void dot_file_add(DotFile dot, const void *elem) {
   }
 }
 
-static DotFile dot_file_create(char *loch) {
+DotFile dot_file_create(char *loch) {
   FILE *file = fopen(loch, "w");
   DotArray *arr = malloc(sizeof(DotArray));
   arr->len = 0;
@@ -719,7 +709,7 @@ static DotFile dot_file_create(char *loch) {
   return dot_file;
 }
 
-static void dot_file_close(DotFile dot) {
+void dot_file_close(DotFile dot) {
   fprintf(dot.file, "}\n");
   fclose(dot.file);
   free(dot.array->elems);
@@ -732,7 +722,7 @@ void rrb_to_dot_file(const RRB *rrb, char *loch) {
   dot_file_close(dot);
 }
 
-static void rrb_to_dot(DotFile dot, const RRB *rrb) {
+void rrb_to_dot(DotFile dot, const RRB *rrb) {
   if (!dot_file_contains(dot, rrb)) {
     dot_file_add(dot, rrb);
     fprintf(dot.file,

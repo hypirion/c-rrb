@@ -50,7 +50,22 @@ const RRB* rrb_slice(const RRB *restrict rrb, uint32_t from, uint32_t to);
 
 #ifdef RRB_DEBUG
 
+#include <stdio.h>
+
+typedef struct _DotArray DotArray;
+
+typedef struct _DotFile {
+  FILE *file;
+  DotArray *array;
+} DotFile;
+
 void rrb_to_dot_file(const RRB *rrb, char *loch);
+
+DotFile dot_file_create(char *loch);
+void dot_file_close(DotFile dot);
+
+void label_pointer(DotFile dot, const void *node, const char *name);
+void rrb_to_dot(DotFile dot, const RRB *rrb);
 
 #endif
 #endif
