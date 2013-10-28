@@ -1,6 +1,6 @@
 CC=$(shell which clang)
 INCLUDEPATH=
-CFLAGS+= -std=c11 -Weverything $(COPT) ${INCLUDEPATH} -g -D RRB_DEBUG
+CFLAGS+= -std=c11 -Weverything -Wno-cast-align $(COPT) ${INCLUDEPATH} -g -D RRB_DEBUG
 OBJDIR = obj
 OBJS = $(addprefix $(OBJDIR)/, main.o rrb.o)
 
