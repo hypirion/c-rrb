@@ -624,7 +624,9 @@ static uint32_t sized_pos(const InternalNode *node, uint32_t *index,
   while (table->size[is] <= *index) {
     is++;
   }
-  *index = *index - ((is == 0) ? 0 : table->size[is-1]);
+  if (is != 0) {
+    *index -= table->size[is-1];
+  }
   return is;
 }
 
