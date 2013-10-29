@@ -644,13 +644,6 @@ void* rrb_nth(const RRB *rrb, uint32_t index) {
     const InternalNode *current = (const InternalNode *) rrb->root;
     switch (rrb->shift) { // Doesn't work well if we change RRB_BITS
       // Need to find a way to automatically unroll stuff.
-    case 1 << (RRB_BITS * 7): // remove later
-      if (current->size_table == NULL) {
-        current = current->child[(index >> (RRB_BITS * 5)) & RRB_MASK];
-      }
-      else {
-        current = sized(current, &index, RRB_BITS * 5);
-      }
     case 1 << (RRB_BITS * 6):
       if (current->size_table == NULL) {
         current = current->child[(index >> (RRB_BITS * 5)) & RRB_MASK];
