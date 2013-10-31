@@ -21,6 +21,7 @@
  *
  */
 
+#include <gc/gc.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -144,13 +145,13 @@ static int concat_count = 0;
 #endif
 
 static RRBSizeTable* size_table_create(uint32_t size) {
-  RRBSizeTable *table = calloc(1, sizeof(RRBSizeTable)
-                               + size * sizeof(uint32_t));
+  RRBSizeTable *table = GC_MALLOC(sizeof(RRBSizeTable)
+                                  + size * sizeof(uint32_t));
   return table;
 }
 
 static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift) {
-  RRB *rrb = malloc(sizeof(RRB));
+  RRB *rrb = GC_MALLOC(sizeof(RRB));
   rrb->root = node;
   rrb->cnt = size;
   rrb->shift = shift;
@@ -158,7 +159,7 @@ static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift) {
 }
 
 static RRB* rrb_head_clone(const RRB* original) {
-  RRB *clone = malloc(sizeof(RRB));
+  RRB *clone = GC_MALLOC(sizeof(RRB));
   memcpy(clone, original, sizeof(RRB));
   return clone;
 }
@@ -168,7 +169,7 @@ const RRB* rrb_create() {
 }
 
 static RRB* rrb_mutable_create() {
-  RRB *rrb = calloc(1, sizeof(RRB));
+  RRB *rrb = GC_MALLOC(sizeof(RRB));
   return rrb;
 }
 
@@ -180,8 +181,9 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
     return left;
   }
   else {
+    /*
 #ifdef RRB_DEBUG
-    char *str = malloc(sizeof(char) * 80);
+    char *str = GC_MALLOC(sizeof(char) * 80);
     sprintf(str, "img/rrb_concat-%03d.dot", concat_count);
     concat_count++;
     DotFile dot = dot_file_create(str);
@@ -191,6 +193,7 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
     rrb_to_dot(dot, right);
     label_pointer(dot, right, "right");
 #endif
+    */
     RRB *new_rrb = rrb_mutable_create(); // ?
     InternalNode *root_candidate = concat_sub_tree(left->root, left->shift,
                                                    right->root, right->shift,
@@ -209,11 +212,13 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
                                              new_rrb->shift);
     }
     new_rrb->cnt = left->cnt + right->cnt;
+    /*
 #ifdef RRB_DEBUG
     rrb_to_dot(dot, new_rrb);
     label_pointer(dot, new_rrb, "result");
     dot_file_close(dot);
 #endif
+    */
     return new_rrb;
   }
 }
@@ -278,13 +283,13 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
 
 static LeafNode* leaf_node_clone(LeafNode *original) {
   size_t size = sizeof(LeafNode) + original->len * sizeof(void *);
-  LeafNode *clone = malloc(size);
+  LeafNode *clone = GC_MALLOC(size);
   memcpy(clone, original, size);
   return clone;
 }
 
 static LeafNode* leaf_node_create(uint32_t len) {
-  LeafNode *node = malloc(sizeof(LeafNode) + len * sizeof(void *));
+  LeafNode *node = GC_MALLOC(sizeof(LeafNode) + len * sizeof(void *));
   node->type = LEAF_NODE;
   node->len = len;
   return node;
@@ -299,7 +304,7 @@ static LeafNode* leaf_node_merge(LeafNode *left, LeafNode *right) {
 }
 
 static InternalNode* internal_node_create(uint32_t len) {
-  InternalNode *node = malloc(sizeof(InternalNode)
+  InternalNode *node = GC_MALLOC(sizeof(InternalNode)
                               + len * sizeof(InternalNode *));
   node->type = INTERNAL_NODE;
   node->len = len;
@@ -347,7 +352,7 @@ static InternalNode* internal_node_merge(InternalNode *left, InternalNode *centr
 
 static InternalNode* internal_node_clone(const InternalNode *original) {
   size_t size = sizeof(InternalNode) + original->len * sizeof(InternalNode *);
-  InternalNode *clone = malloc(size);
+  InternalNode *clone = GC_MALLOC(size);
   memcpy(clone, original, size);
   return clone;
 }
@@ -1026,10 +1031,10 @@ static void dot_file_add(DotFile dot, const void *elem) {
 
 DotFile dot_file_create(char *loch) {
   FILE *file = fopen(loch, "w");
-  DotArray *arr = malloc(sizeof(DotArray));
+  DotArray *arr = GC_MALLOC(sizeof(DotArray));
   arr->len = 0;
   arr->cap = 32;
-  arr->elems = malloc(arr->cap * sizeof(const void *));
+  arr->elems = GC_MALLOC(arr->cap * sizeof(const void *));
   fprintf(file, "digraph g {\n  bgcolor=transparent;\n  node [shape=none];\n");
   DotFile dot_file = {.file = file, .array = arr};
   return dot_file;

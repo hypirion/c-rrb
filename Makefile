@@ -1,6 +1,7 @@
 CC=$(shell which clang)
 INCLUDEPATH=
 CFLAGS+= -std=c11 -Weverything -Wno-cast-align $(COPT) ${INCLUDEPATH} -g -D RRB_DEBUG
+LINKING = -lgc
 OBJDIR = obj
 OBJS = $(addprefix $(OBJDIR)/, main.o rrb.o)
 
@@ -16,7 +17,7 @@ obj/%.o: src/%.c src/%.h
 all: $(EXEC)
 
 $(EXEC): $(OBJS) bin
-	$(CC) $(OBJS) -o $(EXEC)
+	$(CC) ${LINKING} $(OBJS) -o $(EXEC)
 
 png: $(EXEC) img
 	bin/main
