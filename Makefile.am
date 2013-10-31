@@ -1,2 +1,4 @@
 SUBDIRS = src
 EXTRA_DIST = LICENSE
+
+TESTS = check-rrb

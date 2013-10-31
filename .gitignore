@@ -23,3 +23,5 @@
 /config.h
 /src/Makefile
 /ar-lib
+/test-driver
+/check-rrb
