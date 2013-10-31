@@ -1,9 +1,12 @@
 AC_INIT([rrb], [0.1.0-SNAPSHOT], [jeannikl@hypirion.com])
+AC_CONFIG_AUX_DIR([build-aux])
+AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
-AC_PROG_CC([clang gcc cc])
 
-m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
-AC_PROG_RANLIB
+AC_PROG_CC([clang gcc cc])
+AM_PROG_AR
+LT_INIT
+
 
 dnl Find the build directory and the source directory
 top_builddir_absolute=`pwd`
@@ -41,7 +44,7 @@ AC_CHECK_HEADERS([stdlib.h])
 AC_CHECK_HEADERS([string.h])
 
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_FILES([Makefile src/Makefile])
+AC_CONFIG_FILES([Makefile test-suite/Makefile src/Makefile])
 
 RRB_CONFIG_SCRIPT([check-rrb])
 

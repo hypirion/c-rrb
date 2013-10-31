@@ -1,4 +1,5 @@
-SUBDIRS = src
+SUBDIRS = src \
+          test-suite
 EXTRA_DIST = LICENSE
 
-TESTS = check-rrb
+ACLOCAL_AMFLAGS = -I m4

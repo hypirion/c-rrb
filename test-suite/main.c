@@ -21,51 +21,21 @@
  *
  */
 
-#ifndef RRB_H
-#define RRB_H
-
-#include <stdint.h>
-
-#define RRB_BITS 5
-#define RRB_BRANCHING (1 << RRB_BITS)
-#define RRB_MASK (RRB_BRANCHING - 1)
-#define RRB_INVARIANT 1
-#define RRB_EXTRAS 2
-
-typedef struct _RRB RRB;
-
-const RRB* rrb_create(void);
-void rrb_destroy(RRB *rrb);
-
-uint32_t rrb_count(const RRB *rrb);
-void* rrb_nth(const RRB *rrb, uint32_t index);
-const RRB* rrb_pop(const RRB *rrb);
-void* rrb_peek(const RRB *rrb);
-const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt);
-const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restrict elt);
-
-// Not ok to use restrict here (potential refcount issues)
-const RRB* rrb_concat(const RRB *first, const RRB *second);
-const RRB* rrb_slice(const RRB *rrb, uint32_t from, uint32_t to);
-
-#ifdef RRB_DEBUG
-
+#include <gc/gc.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include "main.h"
+#include "rrb.h"
 
-typedef struct _DotArray DotArray;
-
-typedef struct _DotFile {
-  FILE *file;
-  DotArray *array;
-} DotFile;
-
-void rrb_to_dot_file(const RRB *rrb, char *loch);
-
-DotFile dot_file_create(char *loch);
-void dot_file_close(DotFile dot);
-
-void label_pointer(DotFile dot, const void *node, const char *name);
-void rrb_to_dot(DotFile dot, const RRB *rrb);
-
-#endif
-#endif
+int main() {
+  GC_INIT();
+  uint32_t top = 4000;
+  const RRB *rrb1 = rrb_create();
+  const RRB *rrb2 = rrb_create();
+  for (uint32_t i = 0; i < top; i++) {
+    rrb1 = rrb_push(rrb1, (uintptr_t) i);
+    rrb2 = rrb_push(rrb2, (uintptr_t) (i + top));
+    const RRB* catted = rrb_concat(rrb1, rrb2);
+  }
+  puts("done!");
+}

@@ -29,12 +29,18 @@
 
 int main() {
   GC_INIT();
-  uint32_t top = 4000000;
-  const RRB *rrb1 = rrb_create();
-  const RRB *rrb2 = rrb_create();
+  uint32_t top = 400000;
+  int fail = 0;
+  const RRB *rrb = rrb_create();
   for (uint32_t i = 0; i < top; i++) {
-    rrb1 = rrb_push(rrb1, (uintptr_t) i);
-    rrb2 = rrb_push(rrb2, (uintptr_t) (i + top));
-    const RRB* catted = rrb_concat(rrb1, rrb2);
+    rrb = rrb_push(rrb, (uintptr_t) i);
   }
+  for (uint32_t i = 0; i < top; i++) {
+    uintptr_t val = (uintptr_t) rrb_nth(rrb, i);
+    if (val != (uintptr_t) i) {
+      printf("Expected val at pos %d to be %d, was %lu.\n", i, i, val);
+      fail = 1;
+    }
+  }
+  return fail;
 }
