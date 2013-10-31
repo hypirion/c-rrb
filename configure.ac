@@ -12,7 +12,8 @@ AC_SUBST([DEBUG_VARS])
 
 AC_PROG_CC_STDC
 
-AC_CHECK_LIB([gc], [GC_malloc], [GCLIB=-lgc])
+AC_CHECK_LIB([gc], [GC_malloc], [GCLIB=-lgc],
+             AC_MSG_ERROR([Please install libgc in order to compile librrb.]))
 AC_SUBST([GCLIB])
 
 dnl Check for header files here.
