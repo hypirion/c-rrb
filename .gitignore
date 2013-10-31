@@ -16,8 +16,10 @@
 /src/.deps/
 /src/Makefile.in
 /src/*.o
+/src/*.a
 /src/test
 /config.log
 /config.status
 /config.h
 /src/Makefile
+/ar-lib

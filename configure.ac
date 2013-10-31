@@ -2,6 +2,9 @@ AC_INIT([rrb], [0.1.0-SNAPSHOT], [jeannikl@hypirion.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 AC_PROG_CC([clang gcc cc])
 
+m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
+AC_PROG_RANLIB
+
 dnl Setup debug variables
 case $CC in
    *clang*) DEBUG_VARS='-Weverything -Wno-cast-align' ;;
