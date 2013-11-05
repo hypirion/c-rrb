@@ -16,12 +16,6 @@ AC_SUBST(top_srcdir_absolute)
 dnl Config scripts
 AC_DEFUN([RRB_CONFIG_SCRIPT],[AC_CONFIG_FILES([$1],[chmod +x $1])])
 
-dnl Check for programs needed for config scripts
-AC_CHECK_PROG(FIND_CHECK,find,yes)
-if test "x$FIND_CHECK" != "xyes" ; then
-    AC_MSG_ERROR([Please install 'find' before installing.])
-fi
-
 dnl Setup debug variables for c
 case $CC in
    *clang*) DEBUG_VARS='-Weverything -Wno-cast-align' ;;
@@ -44,7 +38,5 @@ AC_CHECK_HEADERS([string.h])
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile test-suite/Makefile src/Makefile])
-
-RRB_CONFIG_SCRIPT([check-rrb])
 
 AC_OUTPUT

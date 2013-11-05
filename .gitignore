@@ -26,7 +26,6 @@
 /src/Makefile.in
 /src/test
 /stamp-h1
-/test-driver
 /test-suite/.deps
 /test-suite/Makefile
 /test-suite/Makefile.in
