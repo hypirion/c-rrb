@@ -26,18 +26,23 @@
 #include <stdlib.h>
 #include "rrb.h"
 
+#define SIZE 400000
+
 int main() {
   GC_INIT();
-  uint32_t top = 400000;
   int fail = 0;
-  const RRB *rrb = rrb_create();
-  for (uint32_t i = 0; i < top; i++) {
-    rrb = rrb_push(rrb, (uintptr_t) i);
+  intptr_t *list = GC_MALLOC_ATOMIC(sizeof(intptr_t) * SIZE);
+  for (uint32_t i = 0; i < SIZE; i++) {
+    list[i] = (intptr_t) rand();
   }
-  for (uint32_t i = 0; i < top; i++) {
-    uintptr_t val = (uintptr_t) rrb_nth(rrb, i);
-    if (val != (uintptr_t) i) {
-      printf("Expected val at pos %d to be %d, was %lu.\n", i, i, val);
+  const RRB *rrb = rrb_create();
+  for (uint32_t i = 0; i < SIZE; i++) {
+    rrb = rrb_push(rrb, (void *) list[i]);
+  }
+  for (uint32_t i = 0; i < SIZE; i++) {
+    intptr_t val = (intptr_t) rrb_nth(rrb, i);
+    if (val != list[i]) {
+      printf("Expected val at pos %d to be %ld, was %ld.\n", i, list[i], val);
       fail = 1;
     }
   }

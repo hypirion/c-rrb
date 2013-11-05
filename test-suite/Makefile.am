@@ -4,9 +4,9 @@ LDADD = $(GCLIB) ../src/librrb.la
 check_PROGRAMS =
 TESTS =
 
-check_PROGRAMS += test_no_cat_segfault
-TESTS += test_no_cat_segfault
-test_no_cat_segfault_SOURCES = test_no_cat_segfault.c
+check_PROGRAMS += test_concat
+TESTS += test_concat
+test_concat_SOURCES = test_concat.c
 
 check_PROGRAMS += test_push
 TESTS += test_push

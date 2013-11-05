@@ -22,17 +22,42 @@
  */
 
 #include <gc/gc.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include "rrb.h"
 
+#define SIZE 10000
+
 int main() {
   GC_INIT();
-  uint32_t top = 4000;
+  int fail = 0;
+  
   const RRB *rrb1 = rrb_create();
   const RRB *rrb2 = rrb_create();
-  for (uint32_t i = 0; i < top; i++) {
-    rrb1 = rrb_push(rrb1, (uintptr_t) i);
-    rrb2 = rrb_push(rrb2, (uintptr_t) (i + top));
+  for (uint32_t i = 0; i < SIZE; i++) {
+    rrb1 = rrb_push(rrb1, (intptr_t) rand());
+    rrb2 = rrb_push(rrb2, (intptr_t) rand());
+    
     const RRB* catted = rrb_concat(rrb1, rrb2);
+    for (uint32_t j = 0; j < (i + 1) * 2; j++) {
+      intptr_t val_cat = (intptr_t) rrb_nth(catted, j);
+      if (j <= i) {
+        intptr_t val1 = (intptr_t) rrb_nth(rrb1, j);
+        if (val1 != val_cat) {
+          printf("Expected val at pos %d to be %ld (left rrb), was %ld.\n",
+                 i, val1, val_cat);
+          fail = 1;
+        }
+      }
+      else { // if (j > i)
+        intptr_t val2 = (intptr_t) rrb_nth(rrb2, j - i - 1);
+        if (val2 != val_cat) {
+          printf("Expected val at pos %d to be %ld (right rrb), was %ld.\n",
+                 i, val2, val_cat);
+          fail = 1;
+        }
+      }
+    }
   }
+  return fail;
 }
