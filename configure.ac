@@ -7,7 +7,6 @@ AC_PROG_CC([clang gcc cc])
 AM_PROG_AR
 LT_INIT
 
-
 dnl Find the build directory and the source directory
 top_builddir_absolute=`pwd`
 AC_SUBST(top_builddir_absolute)

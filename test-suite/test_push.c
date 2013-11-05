@@ -24,7 +24,6 @@
 #include <gc/gc.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "main.h"
 #include "rrb.h"
 
 int main() {

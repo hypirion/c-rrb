@@ -1,11 +1,14 @@
 AM_CPPFLAGS = -I$(srcdir)/../src
-check_PROGRAMS = test_push test
-TESTS = test_push test
+AM_CFLAGS = $(DEBUG_VARS)
+LDADD = $(GCLIB) ../src/librrb.la
+check_PROGRAMS =
+TESTS =
 
-test_SOURCES = main.c
-test_LDADD = $(GCLIB) ../src/librrb.la
-test_CFLAGS = $(DEBUG_VARS)
+check_PROGRAMS += test_no_cat_segfault
+TESTS += test_no_cat_segfault
+test_no_cat_segfault_SOURCES = test_no_cat_segfault.c
 
+check_PROGRAMS += test_push
+TESTS += test_push
 test_push_SOURCES = test_push.c
-test_push_LDADD = $(GCLIB) ../src/librrb.la
-test_push_CFLAGS = $(DEBUG_VARS)
+

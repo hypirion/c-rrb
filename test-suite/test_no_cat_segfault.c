@@ -21,4 +21,18 @@
  *
  */
 
-int main(void);
+#include <gc/gc.h>
+#include <stdlib.h>
+#include "rrb.h"
+
+int main() {
+  GC_INIT();
+  uint32_t top = 4000;
+  const RRB *rrb1 = rrb_create();
+  const RRB *rrb2 = rrb_create();
+  for (uint32_t i = 0; i < top; i++) {
+    rrb1 = rrb_push(rrb1, (uintptr_t) i);
+    rrb2 = rrb_push(rrb2, (uintptr_t) (i + top));
+    const RRB* catted = rrb_concat(rrb1, rrb2);
+  }
+}
