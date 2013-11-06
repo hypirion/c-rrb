@@ -24,12 +24,18 @@
 #include <gc/gc.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "rrb.h"
 
 #define SIZE 10000
 
 int main() {
   GC_INIT();
+
+  time_t timestamp = time(NULL);
+  printf("Timestamp for this run: %llu\n", (unsigned long long) timestamp);
+  srand((unsigned int) timestamp);
+
   int fail = 0;
   
   const RRB *rrb1 = rrb_create();
