@@ -24,18 +24,15 @@
 #include <gc/gc.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include "rrb.h"
+#include "test.h"
 
 #define SIZE    400000
 #define UPDATES 133337
 
 int main() {
   GC_INIT();
-
-  time_t timestamp = time(NULL);
-  printf("Timestamp for this run: %llu\n", (unsigned long long) timestamp);
-  srand((unsigned int) timestamp);
+  randomize_rand();
 
   int fail = 0;
   intptr_t *list = GC_MALLOC_ATOMIC(sizeof(intptr_t) * SIZE);
