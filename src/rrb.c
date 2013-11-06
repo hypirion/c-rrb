@@ -187,7 +187,6 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
     sprintf(str, "img/rrb_concat-%03d.dot", concat_count);
     concat_count++;
     DotFile dot = dot_file_create(str);
-    free(str);
     rrb_to_dot(dot, left);
     label_pointer(dot, left, "left");
     rrb_to_dot(dot, right);
@@ -1043,8 +1042,6 @@ DotFile dot_file_create(char *loch) {
 void dot_file_close(DotFile dot) {
   fprintf(dot.file, "}\n");
   fclose(dot.file);
-  free(dot.array->elems);
-  free(dot.array);
 }
 
 void rrb_to_dot_file(const RRB *rrb, char *loch) {
