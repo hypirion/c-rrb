@@ -1020,8 +1020,8 @@ static void dot_file_add(DotFile dot, const void *elem) {
     // Grow array if needed
     if (dot.array->len == dot.array->cap) {
       dot.array->cap *= 2;
-      dot.array->elems = realloc(dot.array->elems,
-                                 dot.array->cap * sizeof(const void *));
+      dot.array->elems = GC_REALLOC(dot.array->elems,
+                                    dot.array->cap * sizeof(const void *));
     }
     dot.array->elems[dot.array->len] = elem;
     dot.array->len++;
