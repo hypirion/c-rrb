@@ -24,3 +24,6 @@ check_PROGRAMS += test_slice
 TESTS += test_slice
 test_slice_SOURCES = test_slice.c
 
+check_PROGRAMS += test_catslice
+TESTS += test_catslice
+test_catslice_SOURCES = test_catslice.c
