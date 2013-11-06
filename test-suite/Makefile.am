@@ -15,3 +15,8 @@ test_push_SOURCES = test_push.c
 check_PROGRAMS += test_peek
 TESTS += test_peek
 test_peek_SOURCES = test_peek.c
+
+check_PROGRAMS += test_update
+TESTS += test_update
+test_update_SOURCES = test_update.c
+
