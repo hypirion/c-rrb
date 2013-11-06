@@ -20,3 +20,7 @@ check_PROGRAMS += test_update
 TESTS += test_update
 test_update_SOURCES = test_update.c
 
+check_PROGRAMS += test_slice
+TESTS += test_slice
+test_slice_SOURCES = test_slice.c
+

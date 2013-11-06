@@ -27,7 +27,8 @@
 #include <time.h>
 #include "rrb.h"
 
-#define SIZE 10000
+#define SIZE   40000
+#define SLICES 10000
 
 int main() {
   GC_INIT();
@@ -37,33 +38,37 @@ int main() {
   srand((unsigned int) timestamp);
 
   int fail = 0;
-  
-  const RRB *rrb1 = rrb_create();
-  const RRB *rrb2 = rrb_create();
+  intptr_t *list = GC_MALLOC_ATOMIC(sizeof(intptr_t) * SIZE);
   for (uint32_t i = 0; i < SIZE; i++) {
-    rrb1 = rrb_push(rrb1, (void *)((intptr_t) rand()));
-    rrb2 = rrb_push(rrb2, (void *)((intptr_t) rand()));
-    
-    const RRB* catted = rrb_concat(rrb1, rrb2);
-    for (uint32_t j = 0; j < (i + 1) * 2; j++) {
-      intptr_t val_cat = (intptr_t) rrb_nth(catted, j);
-      if (j <= i) {
-        intptr_t val1 = (intptr_t) rrb_nth(rrb1, j);
-        if (val1 != val_cat) {
-          printf("Expected val at pos %d to be %ld (left rrb), was %ld.\n",
-                 i, val1, val_cat);
-          fail = 1;
-        }
-      }
-      else { // if (j > i)
-        intptr_t val2 = (intptr_t) rrb_nth(rrb2, j - i - 1);
-        if (val2 != val_cat) {
-          printf("Expected val at pos %d to be %ld (right rrb), was %ld.\n",
-                 i, val2, val_cat);
-          fail = 1;
-        }
+    list[i] = (intptr_t) rand();
+  }
+  
+  const RRB *rrb = rrb_create();
+  for (uint32_t i = 0; i < SIZE; i++) {
+    rrb = rrb_push(rrb, (void *) list[i]);
+  }
+
+  uint32_t *from_list = GC_MALLOC_ATOMIC(sizeof(int) * SLICES);
+  uint32_t *to_list = GC_MALLOC_ATOMIC(sizeof(int) * SLICES);
+  for (uint32_t i = 0; i < SLICES; i++) {
+    from_list[i] = (uint32_t) rand() % SIZE;
+    to_list[i] = (uint32_t) (rand() % (SIZE - from_list[i])) + from_list[i];
+  }
+
+  for (uint32_t i = 0; i < SLICES; i++) {
+    const RRB *sliced = rrb_slice(rrb, from_list[i], to_list[i]);
+    for (uint32_t j = 0; j < rrb_count(sliced); j++) {
+      intptr_t sliced_val = (intptr_t) rrb_nth(sliced, j);
+      intptr_t original_val = (intptr_t) rrb_nth(rrb, j + from_list[i]);
+      if (sliced_val != original_val) {
+        printf("On iteration %u (bounds [%u, %u]):\n", i, from_list[i],
+               to_list[i]);
+        printf("  Expected val at pos %u to be %ld, was %ld.\n", j,
+               original_val, sliced_val);
+        fail = 1;
       }
     }
   }
+  
   return fail;
 }
