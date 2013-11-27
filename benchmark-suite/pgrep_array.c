@@ -104,19 +104,32 @@ void interval_array_concat(IntervalArray *left, IntervalArray *right) {
 
 int main(int argc, char *argv[]) {
   // CLI argument parsing
-  if (argc != 3) {
-    fprintf(stderr, "Expected 2 arguments, got %d\nExiting...\n", argc - 1);
+  if (argc != 4) {
+    fprintf(stderr, "Expected 3 arguments, got %d\nExiting...\n", argc - 1);
     exit(1);
   }
   else {
-    fprintf(stderr, "Looking for '%s' in file %s...\n", argv[1], argv[2]);
+    char *end;
+    int thread_count = (int) strtol(argv[1], &end, 10);
+    if (*end) {
+      fprintf(stderr, "Error, expects first argument to be a power of two,"
+              " was '%s'.\n", argv[1]);
+      exit(1);
+    }
+    if (!(thread_count && !(thread_count & (thread_count - 1)))) {
+      fprintf(stderr, "Error, first argument must be a power of two, not %d.\n",
+              thread_count);
+      exit(1);
+    }
+    fprintf(stderr, "Looking for '%s' in file %s using %d threads...\n",
+            argv[2], argv[3], thread_count);
 
-    char *search_term = argv[1];
+    char *search_term = argv[2];
 
     FILE *fp;
     long file_size;
     char *buffer;
-    fp = fopen(argv[2], "rb");
+    fp = fopen(argv[3], "rb");
     if (!fp) {
       perror(argv[1]);
       exit(1);
