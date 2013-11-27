@@ -166,8 +166,11 @@ int main(int argc, char *argv[]) {
       }
     }
 
+
     fprintf(stderr, "%d hits\n", contained_intervals->len);
 
+    interval_array_destroy(intervals);
+    interval_array_destroy(contained_intervals);
     free(buffer);
     exit(0);
   }
