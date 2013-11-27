@@ -234,7 +234,6 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
                       right_node, right_shift,
                       false);
     return rebalance(left_internal, centre_node, NULL, left_shift, is_top);
-    // ^ memleak, centre node may be thrown away.
   }
   // If this can be compacted with the block above, we may gain speedups.
   else if (left_shift < right_shift) {
@@ -256,7 +255,6 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
         // Can put them in a single node
         LeafNode *merged = leaf_node_merge(left_leaf, right_leaf);
         return internal_node_new_above1((InternalNode *) merged);
-        // ^ If internal_node_new_above1 doesn't use input ptr, may cause memleak
       }
       else {
         InternalNode *left_internal = (InternalNode *) left_node;
@@ -597,8 +595,7 @@ static uint32_t size_sub_trie(TreeNode *node, uint32_t shift) {
       // TODO: for loopify recursive calls
       /* We're not sure how many are in the last child, so look it up */
       uint32_t last_size =
-        size_sub_trie((TreeNode *) internal->child[internal->len - 1],
-                      child_shift);
+        size_sub_trie((TreeNode *) internal->child[len - 1], child_shift);
       /* We know all but the last ones are filled, and they have child_shift
          elements in them. */
       return child_shift * (len - 1) + last_size;

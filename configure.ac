@@ -38,6 +38,7 @@ AC_CHECK_HEADERS([string.h])
 AC_CHECK_HEADERS([time.h])
 
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_FILES([Makefile test-suite/Makefile src/Makefile])
+AC_CONFIG_FILES([Makefile benchmark-suite/Makefile
+                 test-suite/Makefile src/Makefile])
 
 AC_OUTPUT
