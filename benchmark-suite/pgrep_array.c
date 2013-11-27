@@ -48,8 +48,11 @@ typedef struct {
   pthread_barrier_t *barriers;
 } FilterArgs;
 
-void* split_to_lines(void *void_input);
-void* filter_by_term(void *void_input);
+static void* split_to_lines(void *void_input);
+static void* filter_by_term(void *void_input);
+static inline void concatenate_arrays(uint32_t own_tid, uint32_t thread_count,
+                                      IntervalArray **intervals,
+                                      pthread_barrier_t *barriers);
 
 int main(int argc, char *argv[]) {
   // CLI argument parsing
@@ -130,7 +133,7 @@ int main(int argc, char *argv[]) {
     free(lsa);
     IntervalArray *lines = intervals[0];
     // Found all lines, now onto searching in each list
-    
+
     fprintf(stderr, "%d newlines\n", intervals[0]->len);
 
     FilterArgs *fa = malloc(thread_count * sizeof(FilterArgs));
@@ -200,23 +203,7 @@ void* split_to_lines(void *void_input) {
   }
 
   intervals[own_tid] = lines;
-
-  // barrier before merging result
-  uint32_t sync_mask = (uint32_t) 1;
-  while ((own_tid | sync_mask) != own_tid) {
-    uint32_t sync_tid = own_tid | sync_mask;
-    if (thread_count <= sync_tid) {
-      // jump out here, finished.
-      goto split_to_lines_cleanup;
-    }
-    pthread_barrier_wait(&barriers[sync_tid]);
-    // concatenate data
-    interval_array_concat(intervals[own_tid], intervals[sync_tid]);
-    interval_array_destroy(intervals[sync_tid]);
-    sync_mask = sync_mask << 1;
-  }
-  pthread_barrier_wait(&barriers[own_tid]);
- split_to_lines_cleanup:
+  concatenate_arrays(own_tid, thread_count, intervals, barriers);
   pthread_barrier_destroy(&barriers[own_tid]);
   return 0;
 }
@@ -228,7 +215,7 @@ void* filter_by_term(void *void_input) {
   const uint32_t own_tid = fa->own_tid;
   const uint32_t thread_count = fa->thread_count;
   IntervalArray *lines = fa->lines;
-  IntervalArray **intervals = fa->intervals;  
+  IntervalArray **intervals = fa->intervals;
   pthread_barrier_t *barriers = fa->barriers;
 
   // calculate the lines to compute for
@@ -250,14 +237,23 @@ void* filter_by_term(void *void_input) {
   }
 
   intervals[own_tid] = contained_lines;
+  concatenate_arrays(own_tid, thread_count, intervals, barriers);
+  pthread_barrier_destroy(&barriers[own_tid]);
 
-  // barrier before merging result
+  return 0;
+}
+
+
+static inline void concatenate_arrays(uint32_t own_tid, uint32_t thread_count,
+                                      IntervalArray **intervals,
+                                      pthread_barrier_t *barriers) {
+  // barrier before merging result, to avoid race conditions
   uint32_t sync_mask = (uint32_t) 1;
   while ((own_tid | sync_mask) != own_tid) {
     uint32_t sync_tid = own_tid | sync_mask;
     if (thread_count <= sync_tid) {
       // jump out here, finished.
-      goto filter_by_term_cleanup;
+      return;
     }
     pthread_barrier_wait(&barriers[sync_tid]);
     // concatenate data
@@ -266,7 +262,4 @@ void* filter_by_term(void *void_input) {
     sync_mask = sync_mask << 1;
   }
   pthread_barrier_wait(&barriers[own_tid]);
- filter_by_term_cleanup:
-  pthread_barrier_destroy(&barriers[own_tid]);
-  return 0;
 }
