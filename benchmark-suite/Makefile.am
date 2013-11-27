@@ -1,6 +1,6 @@
 AM_CPPFLAGS = -I$(srcdir)/../src
-AM_CFLAGS = $(DEBUG_VARS)
-LDADD = $(GCLIB) ../src/librrb.la
+AM_CFLAGS = $(DEBUG_VARS) -pthread
+LDADD = $(GCLIB) ../src/librrb.la -lpthread
 
 benchmark: pgrep_rrb grep_array pgrep_array
 

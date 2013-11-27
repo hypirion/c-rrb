@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <pthread.h>
 
 char substr_contains(const char *str, const uint32_t len, const char *target);
 
@@ -102,6 +103,75 @@ void interval_array_concat(IntervalArray *left, IntervalArray *right) {
   left->len = left->len + right->len;
 }
 
+typedef struct {
+  char *buffer;
+  uint32_t file_size;
+  uint32_t own_tid;
+  uint32_t thread_count;
+  IntervalArray **intervals;
+  pthread_barrier_t *barriers;
+} LineSplitArgs;
+
+void* split_to_lines(void *void_input);
+
+void* split_to_lines(void *void_input) {
+  LineSplitArgs *lsa = (LineSplitArgs *) void_input;
+  const char *buffer = lsa->buffer;
+  const uint32_t own_tid = lsa->own_tid;
+  const uint32_t file_size = lsa->file_size;
+  const uint32_t thread_count = lsa->thread_count;
+  IntervalArray **intervals = lsa->intervals;
+  pthread_barrier_t *barriers = lsa->barriers;
+
+  // calculate the interval to compute for
+  uint32_t partition_size = file_size / thread_count;
+  uint32_t from = partition_size * own_tid;
+  uint32_t to = partition_size * (own_tid + 1);
+  if (own_tid + 1 == thread_count) {
+    to = file_size;
+  }
+
+  // find the lines
+  IntervalArray *lines = interval_array_create();
+
+  // rewind to start of line
+  uint32_t line_start = from;
+  while (0 < line_start && lsa->buffer[line_start] != '\n') {
+    line_start--;
+  }
+  // find and collect lines
+  for (uint32_t i = from; i < to; i++) {
+    if (buffer[i] == '\n') {
+      Interval interval = {.from = line_start, .to = i};
+      interval_array_add(lines, interval);
+      line_start = i + 1;
+    }
+  }
+
+  intervals[own_tid] = lines;
+
+  // barrier before merging result
+  uint32_t sync_mask = (uint32_t) 1;
+  while ((own_tid | sync_mask) != own_tid) {
+    uint32_t sync_tid = own_tid | sync_mask;
+    if (thread_count <= sync_tid) {
+      // jump out here, finished.
+      goto split_to_lines_cleanup;
+    }
+    pthread_barrier_wait(&barriers[sync_tid]);
+    // concatenate data
+    interval_array_concat(intervals[own_tid], intervals[sync_tid]);
+    interval_array_destroy(intervals[sync_tid]);
+    sync_mask = sync_mask << 1;
+  }
+  pthread_barrier_wait(&barriers[own_tid]);
+ split_to_lines_cleanup:
+  pthread_barrier_destroy(&barriers[own_tid]);
+  return 0;
+}
+
+
+
 int main(int argc, char *argv[]) {
   // CLI argument parsing
   if (argc != 4) {
@@ -110,7 +180,7 @@ int main(int argc, char *argv[]) {
   }
   else {
     char *end;
-    int thread_count = (int) strtol(argv[1], &end, 10);
+    uint32_t thread_count = (uint32_t) strtol(argv[1], &end, 10);
     if (*end) {
       fprintf(stderr, "Error, expects first argument to be a power of two,"
               " was '%s'.\n", argv[1]);
@@ -157,23 +227,38 @@ int main(int argc, char *argv[]) {
     }
 
     // Find all lines
-    IntervalArray *intervals = interval_array_create();
-    uint32_t line_start = 0;
-    for (uint32_t i = 0; i < file_size; i++) {
-      if (buffer[i] == '\n') {
-        Interval interval = {.from = line_start, .to = i};
-        interval_array_add(intervals, interval);
-        line_start = i + 1;
-      }
+    pthread_t *tid = malloc(thread_count * sizeof(pthread_t));
+    LineSplitArgs *lsa = malloc(thread_count * sizeof(LineSplitArgs));
+    pthread_barrier_t *barriers = malloc(thread_count * sizeof(pthread_barrier_t));
+    IntervalArray **intervals = malloc(thread_count * sizeof(IntervalArray *));
+
+    for (uint32_t i = 0; i < thread_count; i++) {
+      pthread_barrier_init(&barriers[i], NULL, 2);
     }
 
-    fprintf(stderr, "%d newlines\n", intervals->len);
+    for (uint32_t i = 0; i < thread_count; i++) {
+      LineSplitArgs generated =
+        {.buffer = buffer, .file_size = (uint32_t) file_size,
+         .own_tid = i, .thread_count = thread_count,
+         .intervals = intervals, .barriers = barriers};
+      lsa[i] = generated;
+      pthread_create(&tid[i], NULL, &split_to_lines, (void *) &lsa[i]);
+    }
+
+    for (uint32_t i = 0; i < thread_count; i++) {
+      pthread_join(tid[i], NULL);
+    }
+    free(barriers);
+    free(lsa);
+    free(tid);
+
+    fprintf(stderr, "%d newlines\n", intervals[0]->len);
 
     // Find all lines containing search term
     IntervalArray *contained_intervals = interval_array_create();
 
-    for (uint32_t line_idx = 0; line_idx < intervals->len; line_idx++) {
-      Interval line = interval_array_nth(intervals, line_idx);
+    for (uint32_t line_idx = 0; line_idx < intervals[0]->len; line_idx++) {
+      Interval line = interval_array_nth(intervals[0], line_idx);
       if (substr_contains(&buffer[line.from], line.to - line.from, search_term)) {
         interval_array_add(contained_intervals, line);
       }
@@ -181,6 +266,9 @@ int main(int argc, char *argv[]) {
 
     fprintf(stderr, "%d hits\n", contained_intervals->len);
 
+    interval_array_destroy(intervals[0]);
+    free(intervals);
+    interval_array_destroy(contained_intervals);
     free(buffer);
     exit(0);
   }
