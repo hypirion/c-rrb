@@ -26,24 +26,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "interval.h"
-
-char substr_contains(const char *str, const uint32_t len, const char *target);
-
-char substr_contains(const char *str, const uint32_t len, const char *target) {
-  uint32_t start_idx = 0;
-  while (start_idx < len) {
-    uint32_t idx = start_idx;
-    char *p2 = (char *) target;
-    while (idx < len && *p2 && str[idx] == *p2) {
-      idx++;
-      p2++;
-    }
-    if (!*p2)
-      return 1;
-    start_idx++;
-  }
-  return 0;
-}
+#include "substr_contains.h"
 
 int main(int argc, char *argv[]) {
   // CLI argument parsing
