@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <pthread.h>
+#include "interval.h"
 
 char substr_contains(const char *str, const uint32_t len, const char *target);
 
@@ -43,64 +44,6 @@ char substr_contains(const char *str, const uint32_t len, const char *target) {
     start_idx++;
   }
   return 0;
-}
-
-typedef struct {
-  uint32_t from, to;
-} Interval;
-
-typedef struct {
-  uint32_t len, cap;
-  Interval *arr;
-} IntervalArray;
-
-
-IntervalArray* interval_array_create(void);
-void interval_array_destroy(IntervalArray *int_arr);
-Interval interval_array_nth(IntervalArray *int_arr, uint32_t index);
-void interval_array_add(IntervalArray *int_arr, Interval data);
-void interval_array_concat(IntervalArray *left, IntervalArray *right);
-
-IntervalArray* interval_array_create() {
-  IntervalArray *container = malloc(sizeof(IntervalArray));
-  Interval *arr = malloc(32 * sizeof(Interval));
-  container->len = 0;
-  container->cap = 32;
-  container->arr = arr;
-  return container;
-}
-
-void interval_array_destroy(IntervalArray *int_arr) {
-  free(int_arr->arr);
-  free(int_arr);
-}
-
-void interval_array_add(IntervalArray *int_arr, Interval data) {
-  if (int_arr->len == int_arr->cap) {
-    int_arr->cap *= 2;
-    int_arr->arr = realloc(int_arr->arr, int_arr->cap * sizeof(Interval));
-  }
-  int_arr->arr[int_arr->len] = data;
-  int_arr->len++;
-}
-
-Interval interval_array_nth(IntervalArray *int_arr, uint32_t index) {
-  if (index >= int_arr->len) {
-    Interval empty = {0, 0};
-    return empty;
-  }
-  else {
-    return int_arr->arr[index];
-  }
-}
-
-void interval_array_concat(IntervalArray *left, IntervalArray *right) {
-  if (left->cap < left->len + right->len) {
-    left->cap = left->len + right->len;
-    left->arr = realloc(left->arr, left->cap * sizeof(Interval));
-  }
-  memcpy(&left->arr[left->len], &right->arr[0], right->len * sizeof(Interval));
-  left->len = left->len + right->len;
 }
 
 typedef struct {
