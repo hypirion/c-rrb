@@ -22,12 +22,27 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
+#include "rrb.h"
 
 void randomize_rand(void);
+void print_rrb(const RRB *rrb);
 
 void randomize_rand() {
   time_t timestamp = time(NULL);
   printf("Timestamp for this run: %u\n", (unsigned int) timestamp);
   srand((unsigned int) timestamp);
+}
+
+void print_rrb(const RRB *rrb) {
+  uint32_t count = rrb_count(rrb);
+  printf("[");
+  char sep = 0;
+  for (uint32_t i = 0; i < count; i++) {
+    intptr_t val = (intptr_t) rrb_nth(rrb, i);
+    printf("%s%ld", sep ? ", " : "", val);
+    sep = 1;
+  }
+  printf("]\n");
 }
