@@ -38,65 +38,18 @@ typedef struct {
   pthread_barrier_t *barriers;
 } LineSplitArgs;
 
+typedef struct {
+  char *buffer;
+  char *search_term;
+  uint32_t own_tid;
+  uint32_t thread_count;
+  IntervalArray *lines;
+  IntervalArray **intervals;
+  pthread_barrier_t *barriers;
+} FilterArgs;
+
 void* split_to_lines(void *void_input);
-
-void* split_to_lines(void *void_input) {
-  LineSplitArgs *lsa = (LineSplitArgs *) void_input;
-  const char *buffer = lsa->buffer;
-  const uint32_t own_tid = lsa->own_tid;
-  const uint32_t file_size = lsa->file_size;
-  const uint32_t thread_count = lsa->thread_count;
-  IntervalArray **intervals = lsa->intervals;
-  pthread_barrier_t *barriers = lsa->barriers;
-
-  // calculate the interval to compute for
-  uint32_t partition_size = file_size / thread_count;
-  uint32_t from = partition_size * own_tid;
-  uint32_t to = partition_size * (own_tid + 1);
-  if (own_tid + 1 == thread_count) {
-    to = file_size;
-  }
-
-  // find the lines
-  IntervalArray *lines = interval_array_create();
-
-  // rewind to start of line
-  uint32_t line_start = from;
-  while (0 < line_start && lsa->buffer[line_start] != '\n') {
-    line_start--;
-  }
-  // find and collect lines
-  for (uint32_t i = from; i < to; i++) {
-    if (buffer[i] == '\n') {
-      Interval interval = {.from = line_start, .to = i};
-      interval_array_add(lines, interval);
-      line_start = i + 1;
-    }
-  }
-
-  intervals[own_tid] = lines;
-
-  // barrier before merging result
-  uint32_t sync_mask = (uint32_t) 1;
-  while ((own_tid | sync_mask) != own_tid) {
-    uint32_t sync_tid = own_tid | sync_mask;
-    if (thread_count <= sync_tid) {
-      // jump out here, finished.
-      goto split_to_lines_cleanup;
-    }
-    pthread_barrier_wait(&barriers[sync_tid]);
-    // concatenate data
-    interval_array_concat(intervals[own_tid], intervals[sync_tid]);
-    interval_array_destroy(intervals[sync_tid]);
-    sync_mask = sync_mask << 1;
-  }
-  pthread_barrier_wait(&barriers[own_tid]);
- split_to_lines_cleanup:
-  pthread_barrier_destroy(&barriers[own_tid]);
-  return 0;
-}
-
-
+void* filter_by_term(void *void_input);
 
 int main(int argc, char *argv[]) {
   // CLI argument parsing
@@ -163,40 +116,157 @@ int main(int argc, char *argv[]) {
     }
 
     for (uint32_t i = 0; i < thread_count; i++) {
-      LineSplitArgs generated =
+      LineSplitArgs arguments =
         {.buffer = buffer, .file_size = (uint32_t) file_size,
          .own_tid = i, .thread_count = thread_count,
          .intervals = intervals, .barriers = barriers};
-      lsa[i] = generated;
+      lsa[i] = arguments;
       pthread_create(&tid[i], NULL, &split_to_lines, (void *) &lsa[i]);
     }
 
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_join(tid[i], NULL);
     }
-    free(barriers);
     free(lsa);
-    free(tid);
-
+    IntervalArray *lines = intervals[0];
+    // Found all lines, now onto searching in each list
+    
     fprintf(stderr, "%d newlines\n", intervals[0]->len);
 
-    // Find all lines containing search term
-    IntervalArray *contained_intervals = interval_array_create();
+    FilterArgs *fa = malloc(thread_count * sizeof(FilterArgs));
+    // Reuse barrier and intervals array
 
-    for (uint32_t line_idx = 0; line_idx < intervals[0]->len; line_idx++) {
-      Interval line = interval_array_nth(intervals[0], line_idx);
-      if (substr_contains(&buffer[line.from], line.to - line.from, search_term)) {
-        interval_array_add(contained_intervals, line);
-      }
+    for (uint32_t i = 0; i < thread_count; i++) {
+      pthread_barrier_init(&barriers[i], NULL, 2);
     }
 
-    fprintf(stderr, "%d hits\n", contained_intervals->len);
+    for (uint32_t i = 0; i < thread_count; i++) {
+      FilterArgs arguments =
+        {.buffer = buffer, .search_term = search_term,
+         .lines = lines,
+         .own_tid = i, .thread_count = thread_count,
+         .intervals = intervals, .barriers = barriers};
+      fa[i] = arguments;
+      pthread_create(&tid[i], NULL, &filter_by_term, (void *) &fa[i]);
+    }
 
+    for (uint32_t i = 0; i < thread_count; i++) {
+      pthread_join(tid[i], NULL);
+    }
+
+    fprintf(stderr, "%d hits\n", intervals[0]->len);
+
+    interval_array_destroy(lines);
     interval_array_destroy(intervals[0]);
     free(intervals);
-    interval_array_destroy(contained_intervals);
     free(buffer);
     exit(0);
   }
 
+}
+
+void* split_to_lines(void *void_input) {
+  LineSplitArgs *lsa = (LineSplitArgs *) void_input;
+  const char *buffer = lsa->buffer;
+  const uint32_t own_tid = lsa->own_tid;
+  const uint32_t file_size = lsa->file_size;
+  const uint32_t thread_count = lsa->thread_count;
+  IntervalArray **intervals = lsa->intervals;
+  pthread_barrier_t *barriers = lsa->barriers;
+
+  // calculate the interval to compute for
+  uint32_t partition_size = file_size / thread_count;
+  uint32_t from = partition_size * own_tid;
+  uint32_t to = partition_size * (own_tid + 1);
+  if (own_tid + 1 == thread_count) {
+    to = file_size;
+  }
+
+  // find the lines
+  IntervalArray *lines = interval_array_create();
+
+  // rewind to start of line
+  uint32_t line_start = from;
+  while (0 < line_start && lsa->buffer[line_start] != '\n') {
+    line_start--;
+  }
+  // find and collect lines
+  for (uint32_t i = from; i < to; i++) {
+    if (buffer[i] == '\n') {
+      Interval interval = {.from = line_start, .to = i};
+      interval_array_add(lines, interval);
+      line_start = i + 1;
+    }
+  }
+
+  intervals[own_tid] = lines;
+
+  // barrier before merging result
+  uint32_t sync_mask = (uint32_t) 1;
+  while ((own_tid | sync_mask) != own_tid) {
+    uint32_t sync_tid = own_tid | sync_mask;
+    if (thread_count <= sync_tid) {
+      // jump out here, finished.
+      goto split_to_lines_cleanup;
+    }
+    pthread_barrier_wait(&barriers[sync_tid]);
+    // concatenate data
+    interval_array_concat(intervals[own_tid], intervals[sync_tid]);
+    interval_array_destroy(intervals[sync_tid]);
+    sync_mask = sync_mask << 1;
+  }
+  pthread_barrier_wait(&barriers[own_tid]);
+ split_to_lines_cleanup:
+  pthread_barrier_destroy(&barriers[own_tid]);
+  return 0;
+}
+
+void* filter_by_term(void *void_input) {
+  FilterArgs *fa = (FilterArgs *) void_input;
+  const char *buffer = fa->buffer;
+  const char *search_term = fa->search_term;
+  const uint32_t own_tid = fa->own_tid;
+  const uint32_t thread_count = fa->thread_count;
+  IntervalArray *lines = fa->lines;
+  IntervalArray **intervals = fa->intervals;  
+  pthread_barrier_t *barriers = fa->barriers;
+
+  // calculate the lines to compute for
+  uint32_t partition_size = lines->len / thread_count;
+  uint32_t from = partition_size * own_tid;
+  uint32_t to = partition_size * (own_tid + 1);
+  if (own_tid + 1 == thread_count) {
+    to = lines->len;
+  }
+
+  // find all lines containing the search term
+  IntervalArray *contained_lines = interval_array_create();
+
+  for (uint32_t line_idx = from; line_idx < to; line_idx++) {
+    Interval line = interval_array_nth(lines, line_idx);
+    if (substr_contains(&buffer[line.from], line.to - line.from, search_term)) {
+      interval_array_add(contained_lines, line);
+    }
+  }
+
+  intervals[own_tid] = contained_lines;
+
+  // barrier before merging result
+  uint32_t sync_mask = (uint32_t) 1;
+  while ((own_tid | sync_mask) != own_tid) {
+    uint32_t sync_tid = own_tid | sync_mask;
+    if (thread_count <= sync_tid) {
+      // jump out here, finished.
+      goto filter_by_term_cleanup;
+    }
+    pthread_barrier_wait(&barriers[sync_tid]);
+    // concatenate data
+    interval_array_concat(intervals[own_tid], intervals[sync_tid]);
+    interval_array_destroy(intervals[sync_tid]);
+    sync_mask = sync_mask << 1;
+  }
+  pthread_barrier_wait(&barriers[own_tid]);
+ filter_by_term_cleanup:
+  pthread_barrier_destroy(&barriers[own_tid]);
+  return 0;
 }
