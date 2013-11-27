@@ -26,6 +26,24 @@
 #include <stdint.h>
 #include <string.h>
 
+char substr_contains(const char *str, const uint32_t len, const char *target);
+
+char substr_contains(const char *str, const uint32_t len, const char *target) {
+  uint32_t start_idx = 0;
+  while (start_idx < len) {
+    uint32_t idx = start_idx;
+    char *p2 = (char *) target;
+    while (idx < len && *p2 && str[idx] == *p2) {
+      idx++;
+      p2++;
+    }
+    if (!*p2)
+      return 1;
+    start_idx++;
+  }
+  return 0;
+}
+
 typedef struct {
   uint32_t from, to;
 } Interval;
@@ -35,8 +53,10 @@ typedef struct {
   Interval *arr;
 } IntervalArray;
 
+
 IntervalArray* interval_array_create(void);
 void interval_array_destroy(IntervalArray *int_arr);
+Interval interval_array_nth(IntervalArray *int_arr, uint32_t index);
 void interval_array_add(IntervalArray *int_arr, Interval data);
 void interval_array_concat(IntervalArray *left, IntervalArray *right);
 
@@ -63,6 +83,16 @@ void interval_array_add(IntervalArray *int_arr, Interval data) {
   int_arr->len++;
 }
 
+Interval interval_array_nth(IntervalArray *int_arr, uint32_t index) {
+  if (index >= int_arr->len) {
+    Interval empty = {0, 0};
+    return empty;
+  }
+  else {
+    return int_arr->arr[index];
+  }
+}
+
 void interval_array_concat(IntervalArray *left, IntervalArray *right) {
   if (left->cap < left->len + right->len) {
     left->cap = left->len + right->len;
@@ -74,17 +104,19 @@ void interval_array_concat(IntervalArray *left, IntervalArray *right) {
 
 int main(int argc, char *argv[]) {
   // CLI argument parsing
-  if (argc != 2) {
-    fprintf(stderr, "Expected 1 argument, got %d\nExiting...\n", argc - 1);
+  if (argc != 3) {
+    fprintf(stderr, "Expected 2 arguments, got %d\nExiting...\n", argc - 1);
     exit(1);
   }
   else {
-    fprintf(stderr, "Your input was %s\n", argv[1]);
+    fprintf(stderr, "Looking for '%s' in file %s...\n", argv[1], argv[2]);
+
+    char *search_term = argv[1];
 
     FILE *fp;
     long file_size;
     char *buffer;
-    fp = fopen(argv[1], "rb");
+    fp = fopen(argv[2], "rb");
     if (!fp) {
       perror(argv[1]);
       exit(1);
@@ -100,7 +132,7 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
     buffer[file_size] = 0;
-    
+
     if (1 != fread(buffer, file_size, 1, fp)) {
       fclose(fp);
       free(buffer);
@@ -111,6 +143,7 @@ int main(int argc, char *argv[]) {
       fclose(fp);
     }
 
+    // Find all lines
     IntervalArray *intervals = interval_array_create();
     uint32_t line_start = 0;
     for (uint32_t i = 0; i < file_size; i++) {
@@ -121,10 +154,22 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    fprintf(stdout, "%d newlines\n", intervals->len);
+    fprintf(stderr, "%d newlines\n", intervals->len);
+
+    // Find all lines containing search term
+    IntervalArray *contained_intervals = interval_array_create();
+
+    for (uint32_t line_idx = 0; line_idx < intervals->len; line_idx++) {
+      Interval line = interval_array_nth(intervals, line_idx);
+      if (substr_contains(&buffer[line.from], line.to - line.from, search_term)) {
+        interval_array_add(contained_intervals, line);
+      }
+    }
+
+    fprintf(stderr, "%d hits\n", contained_intervals->len);
 
     free(buffer);
     exit(0);
   }
-  
+
 }
