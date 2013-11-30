@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 #include <pthread.h>
 #include "interval.h"
 #include "substr_contains.h"
@@ -116,6 +117,8 @@ int main(int argc, char *argv[]) {
     pthread_t *tid = malloc(thread_count * sizeof(pthread_t));
     LineSplitArgs *lsa = malloc(thread_count * sizeof(LineSplitArgs));
     IntervalArray **intervals = malloc(thread_count * sizeof(IntervalArray *));
+    struct timespec time_start, time_stop;
+    long long nanoseconds_elapsed;
 
     for (uint32_t i = 0; i < thread_count; i++) {
       LineSplitArgs arguments =
@@ -123,12 +126,21 @@ int main(int argc, char *argv[]) {
          .own_tid = i, .thread_count = thread_count,
          .intervals = intervals};
       lsa[i] = arguments;
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &time_start);
+    for (uint32_t i = 0; i < thread_count; i++) {
       pthread_create(&tid[i], NULL, &split_to_lines, (void *) &lsa[i]);
     }
 
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_join(tid[i], NULL);
     }
+    clock_gettime(CLOCK_MONOTONIC, &time_stop);
+    nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
+    nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
+    printf("%lld nanoseconds for line splitting\n", nanoseconds_elapsed);
+
     free(lsa);
 
     // Concatenate work
@@ -138,18 +150,24 @@ int main(int argc, char *argv[]) {
 
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_barrier_init(&barriers[i], NULL, 2);
-    }
-
-    for (uint32_t i = 0; i < thread_count; i++) {
       ConcatArgs args = {.own_tid = i, .thread_count = thread_count,
                          .intervals = intervals, .barriers = barriers};
       ca[i] = args;
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &time_start);
+    for (uint32_t i = 0; i < thread_count; i++) {
       pthread_create(&tid[i], NULL, &concatenate_arrays, (void *) &ca[i]);
     }
 
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_join(tid[i], NULL);
     }
+    clock_gettime(CLOCK_MONOTONIC, &time_stop);
+    nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
+    nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
+
+    printf("%lld nanoseconds for line concat\n", nanoseconds_elapsed);
 
     IntervalArray *lines = intervals[0];
     // Found all lines, now onto searching in each list
@@ -165,6 +183,10 @@ int main(int argc, char *argv[]) {
          .lines = lines, .intervals = intervals,
          .own_tid = i, .thread_count = thread_count};
       fa[i] = arguments;
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &time_start);
+    for (uint32_t i = 0; i < thread_count; i++) {
       pthread_create(&tid[i], NULL, &filter_by_term, (void *) &fa[i]);
     }
 
@@ -172,23 +194,38 @@ int main(int argc, char *argv[]) {
       pthread_join(tid[i], NULL);
     }
 
+    clock_gettime(CLOCK_MONOTONIC, &time_stop);
+    nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
+    nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
+
+    printf("%lld nanoseconds for searching\n", nanoseconds_elapsed);
+
+
     // Concatenate work
     // Reuse concat args and barriers
 
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_barrier_init(&barriers[i], NULL, 2);
-    }
-
-    for (uint32_t i = 0; i < thread_count; i++) {
       ConcatArgs args = {.own_tid = i, .thread_count = thread_count,
                          .intervals = intervals, .barriers = barriers};
       ca[i] = args;
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &time_start);
+    for (uint32_t i = 0; i < thread_count; i++) {
       pthread_create(&tid[i], NULL, &concatenate_arrays, (void *) &ca[i]);
     }
 
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_join(tid[i], NULL);
     }
+
+    clock_gettime(CLOCK_MONOTONIC, &time_stop);
+    nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
+    nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
+
+    printf("%lld nanoseconds for concat searching\n", nanoseconds_elapsed);
+
 
     fprintf(stderr, "%d hits\n", intervals[0]->len);
 
