@@ -67,3 +67,14 @@ void interval_array_concat(IntervalArray *left, IntervalArray *right) {
   memcpy(&left->arr[left->len], &right->arr[0], right->len * sizeof(Interval));
   left->len = left->len + right->len;
 }
+
+
+uint64_t interval_to_uint64_t(Interval interval) {
+  uint64_t val = (((uint64_t) interval.to) << 32) | interval.from;
+  return val;
+}
+
+Interval uint64_t_to_interval(uint64_t interval) {
+  Interval val = {.to = interval >> 32, .from = interval & 0xFFFFFFFF};
+  return val;
+}

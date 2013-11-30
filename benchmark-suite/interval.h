@@ -40,4 +40,7 @@ void interval_array_destroy(IntervalArray *int_arr);
 Interval interval_array_nth(IntervalArray *int_arr, uint32_t index);
 void interval_array_add(IntervalArray *int_arr, Interval data);
 void interval_array_concat(IntervalArray *left, IntervalArray *right);
+
+uint64_t interval_to_uint64_t(Interval interval);
+Interval uint64_t_to_interval(uint64_t interval);
 #endif
