@@ -250,8 +250,9 @@ int main(int argc, char *argv[]) {
 
     fprintf(stderr, "%d hits\n", intervals[0]);
 
-    printf("%lld %lld %lld %lld\n", line_split, line_concat,
-           search_lines, search_concat);
+    printf("%lld %lld %lld %lld %lld\n", line_split, line_concat,
+           search_lines, search_concat,
+           line_split + line_concat + search_lines + search_concat);
 
     interval_array_destroy(lines);
     free(intervals);
