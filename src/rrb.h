@@ -26,11 +26,15 @@
 
 #include <stdint.h>
 
+#ifndef RRB_BITS
 #define RRB_BITS 5
+#endif
 #define RRB_BRANCHING (1 << RRB_BITS)
 #define RRB_MASK (RRB_BRANCHING - 1)
 #define RRB_INVARIANT 1
+#ifndef RRB_EXTRAS
 #define RRB_EXTRAS 2
+#endif
 
 typedef struct _RRB RRB;
 
