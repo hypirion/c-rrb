@@ -131,8 +131,6 @@ int main(int argc, char *argv[]) {
       fclose(fp);
     }
 
-    // Actually find lines
-    IntervalArray *lines = find_lines(buffer, (uint32_t) file_size, thread_count);
     
     // Find all lines
     pthread_t *tid = malloc(thread_count * sizeof(pthread_t));
@@ -191,6 +189,10 @@ int main(int argc, char *argv[]) {
     long long line_concat = nanoseconds_elapsed;
 
     uint32_t line_count = intervals[0];
+
+    // Actually find lines (done here, to avoid cache modification)
+    IntervalArray *lines = find_lines(buffer, (uint32_t) file_size, thread_count);
+
     // Found all lines, now onto searching in each list
 
     fprintf(stderr, "%d newlines\n", line_count);
