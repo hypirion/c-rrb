@@ -160,7 +160,8 @@ int main(int argc, char *argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &time_stop);
     nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
     nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
-    printf("%lld nanoseconds for line splitting\n", nanoseconds_elapsed);
+
+    long long line_split = nanoseconds_elapsed;
 
     free(lsa);
 
@@ -187,7 +188,7 @@ int main(int argc, char *argv[]) {
     nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
     nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
 
-    printf("%lld nanoseconds for line concat\n", nanoseconds_elapsed);
+    long long line_concat = nanoseconds_elapsed;
 
     uint32_t line_count = intervals[0];
     // Found all lines, now onto searching in each list
@@ -218,8 +219,7 @@ int main(int argc, char *argv[]) {
     nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
     nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
 
-    printf("%lld nanoseconds for searching\n", nanoseconds_elapsed);
-
+    long long search_lines = nanoseconds_elapsed;
 
     // Concatenate work
     // Reuse concat args and barriers
@@ -244,10 +244,12 @@ int main(int argc, char *argv[]) {
     nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
     nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
 
-    printf("%lld nanoseconds for concat searching\n", nanoseconds_elapsed);
-
+    long long search_concat = nanoseconds_elapsed;
 
     fprintf(stderr, "%d hits\n", intervals[0]);
+
+    printf("%lld %lld %lld %lld\n", line_split, line_concat,
+           search_lines, search_concat);
 
     interval_array_destroy(lines);
     free(intervals);
