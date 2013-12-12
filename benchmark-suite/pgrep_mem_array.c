@@ -21,30 +21,24 @@
  *
  */
 
-#define _DYNAMIC 0
-#define GC_LINUX_THREADS
-#ifndef _REENTRANT
-#define _REENTRANT 1
-#endif
-
-#include <gc/gc.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include <time.h>
 #include <pthread.h>
-#include <rrb.h>
 #include "interval.h"
 #include "substr_contains.h"
+
+#ifndef MAX
+#define MAX(a,b) (((a)>(b))?(a):(b))
+#endif
 
 typedef struct {
   char *buffer;
   uint32_t file_size;
   uint32_t own_tid;
   uint32_t thread_count;
-  RRB **intervals;
+  IntervalArray **intervals;
 } LineSplitArgs;
 
 typedef struct {
@@ -52,23 +46,24 @@ typedef struct {
   char *search_term;
   uint32_t own_tid;
   uint32_t thread_count;
-  RRB *lines;
-  RRB **intervals;
+  IntervalArray *lines;
+  IntervalArray **intervals;
 } FilterArgs;
 
 typedef struct {
   uint32_t own_tid;
   uint32_t thread_count;
-  RRB **intervals;
+  IntervalArray **intervals;
+  uint32_t *max_concat_size;
   pthread_barrier_t *barriers;
 } ConcatArgs;
 
+
 static void* split_to_lines(void *void_input);
 static void* filter_by_term(void *void_input);
-static void* concatenate_rrbs(void *void_input);
+static void* concatenate_arrays(void *void_input);
 
 int main(int argc, char *argv[]) {
-  GC_INIT();
   // CLI argument parsing
   if (argc != 4) {
     fprintf(stderr, "Expected 3 arguments, got %d\nExiting...\n", argc - 1);
@@ -125,9 +120,7 @@ int main(int argc, char *argv[]) {
     // Find all lines
     pthread_t *tid = malloc(thread_count * sizeof(pthread_t));
     LineSplitArgs *lsa = malloc(thread_count * sizeof(LineSplitArgs));
-    RRB **intervals = GC_MALLOC(thread_count * sizeof(RRB *));
-    struct timespec time_start, time_stop;
-    long long nanoseconds_elapsed;
+    IntervalArray **intervals = malloc(thread_count * sizeof(IntervalArray *));
 
     for (uint32_t i = 0; i < thread_count; i++) {
       LineSplitArgs arguments =
@@ -137,7 +130,6 @@ int main(int argc, char *argv[]) {
       lsa[i] = arguments;
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &time_start);
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_create(&tid[i], NULL, &split_to_lines, (void *) &lsa[i]);
     }
@@ -145,45 +137,34 @@ int main(int argc, char *argv[]) {
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_join(tid[i], NULL);
     }
-    clock_gettime(CLOCK_MONOTONIC, &time_stop);
-    nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
-    nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
-
-    long long line_split = nanoseconds_elapsed;
-
     free(lsa);
 
     // Concatenate work
 
     ConcatArgs *ca = malloc(thread_count * sizeof(ConcatArgs));
+    uint32_t *max_concat_size = calloc(thread_count, sizeof(uint32_t));
     pthread_barrier_t *barriers = malloc(thread_count * sizeof(pthread_barrier_t));
 
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_barrier_init(&barriers[i], NULL, 2);
       ConcatArgs args = {.own_tid = i, .thread_count = thread_count,
-                         .intervals = intervals, .barriers = barriers};
+                         .intervals = intervals, .barriers = barriers,
+                         .max_concat_size = max_concat_size};
       ca[i] = args;
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &time_start);
     for (uint32_t i = 0; i < thread_count; i++) {
-      pthread_create(&tid[i], NULL, &concatenate_rrbs, (void *) &ca[i]);
+      pthread_create(&tid[i], NULL, &concatenate_arrays, (void *) &ca[i]);
     }
 
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_join(tid[i], NULL);
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &time_stop);
-    nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
-    nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
-
-    long long line_concat = nanoseconds_elapsed;
-
-    RRB *lines = intervals[0];
+    IntervalArray *lines = intervals[0];
     // Found all lines, now onto searching in each list
 
-    fprintf(stderr, "%d newlines\n", rrb_count(intervals[0]));
+    fprintf(stderr, "%d newlines\n", intervals[0]->len);
 
     FilterArgs *fa = malloc(thread_count * sizeof(FilterArgs));
     // Reuse intervals array
@@ -196,7 +177,6 @@ int main(int argc, char *argv[]) {
       fa[i] = arguments;
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &time_start);
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_create(&tid[i], NULL, &filter_by_term, (void *) &fa[i]);
     }
@@ -205,45 +185,51 @@ int main(int argc, char *argv[]) {
       pthread_join(tid[i], NULL);
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &time_stop);
-    nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
-    nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
-
-    long long search_lines = nanoseconds_elapsed;
+    uint32_t total_mem = 0;
+    // find total memory usage
+    for (uint32_t i = 0; i < thread_count; i++) {
+      total_mem += sizeof(Interval) * intervals[i]->cap + sizeof(IntervalArray);
+    }
 
     // Concatenate work
     // Reuse concat args and barriers
 
+    memset(max_concat_size, 0, thread_count * sizeof(uint32_t));
+
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_barrier_init(&barriers[i], NULL, 2);
       ConcatArgs args = {.own_tid = i, .thread_count = thread_count,
-                         .intervals = intervals, .barriers = barriers};
+                         .intervals = intervals, .barriers = barriers,
+                         .max_concat_size = max_concat_size};
       ca[i] = args;
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &time_start);
     for (uint32_t i = 0; i < thread_count; i++) {
-      pthread_create(&tid[i], NULL, &concatenate_rrbs, (void *) &ca[i]);
+      pthread_create(&tid[i], NULL, &concatenate_arrays, (void *) &ca[i]);
     }
 
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_join(tid[i], NULL);
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &time_stop);
-    nanoseconds_elapsed = (time_stop.tv_sec - time_start.tv_sec) * 1000000000LL;
-    nanoseconds_elapsed += (time_stop.tv_nsec - time_start.tv_nsec);
+    uint32_t maxcat = 0;
+    for (uint32_t i = 0; i < thread_count; i++) {
+      maxcat = MAX(maxcat, max_concat_size[i]);
+    }
 
-    long long search_concat = nanoseconds_elapsed;
+    printf("%d %d \"%s\"\n", total_mem, maxcat, search_term);
 
-    fprintf(stderr, "%d hits\n", rrb_count(intervals[0]));
+    fprintf(stderr, "%d hits\n", intervals[0]->len);
 
-    printf("%lld %lld %lld %lld %lld\n", line_split, line_concat,
-           search_lines, search_concat,
-           line_split + line_concat + search_lines + search_concat);
-
-    free(barriers);
+    
+    
+    interval_array_destroy(lines);
+    interval_array_destroy(intervals[0]);
+    free(intervals);
+    free(max_concat_size);
     free(buffer);
+    free(ca);
+    free(barriers);
     exit(0);
   }
 
@@ -255,7 +241,7 @@ static void* split_to_lines(void *void_input) {
   const uint32_t own_tid = lsa->own_tid;
   const uint32_t file_size = lsa->file_size;
   const uint32_t thread_count = lsa->thread_count;
-  RRB **intervals = lsa->intervals;
+  IntervalArray **intervals = lsa->intervals;
 
   // calculate the interval to compute for
   uint32_t partition_size = file_size / thread_count;
@@ -266,7 +252,7 @@ static void* split_to_lines(void *void_input) {
   }
 
   // find the lines
-  RRB *lines = rrb_create();
+  IntervalArray *lines = interval_array_create();
 
   // rewind to start of line
   uint32_t line_start = from;
@@ -277,12 +263,13 @@ static void* split_to_lines(void *void_input) {
   for (uint32_t i = from; i < to; i++) {
     if (buffer[i] == '\n') {
       Interval interval = {.from = line_start, .to = i};
-      lines = rrb_push(lines, (void *) interval_to_uint64_t(interval));
+      interval_array_add(lines, interval);
       line_start = i + 1;
     }
   }
 
   intervals[own_tid] = lines;
+
   return 0;
 }
 
@@ -292,24 +279,24 @@ static void* filter_by_term(void *void_input) {
   const char *search_term = fa->search_term;
   const uint32_t own_tid = fa->own_tid;
   const uint32_t thread_count = fa->thread_count;
-  RRB *lines = fa->lines;
-  RRB **intervals = fa->intervals;
+  IntervalArray *lines = fa->lines;
+  IntervalArray **intervals = fa->intervals;
 
   // calculate the lines to compute for
-  uint32_t partition_size = rrb_count(lines) / thread_count;
+  uint32_t partition_size = lines->len / thread_count;
   uint32_t from = partition_size * own_tid;
   uint32_t to = partition_size * (own_tid + 1);
   if (own_tid + 1 == thread_count) {
-    to = rrb_count(lines);
+    to = lines->len;
   }
 
   // find all lines containing the search term
-  RRB *contained_lines = rrb_create();
+  IntervalArray *contained_lines = interval_array_create();
 
   for (uint32_t line_idx = from; line_idx < to; line_idx++) {
-    Interval line = (Interval) uint64_t_to_interval((uint64_t) rrb_nth(lines, line_idx));
+    Interval line = interval_array_nth(lines, line_idx);
     if (substr_contains(&buffer[line.from], line.to - line.from, search_term)) {
-      contained_lines = rrb_push(contained_lines, (void *) interval_to_uint64_t(line));
+      interval_array_add(contained_lines, line);
     }
   }
 
@@ -317,12 +304,13 @@ static void* filter_by_term(void *void_input) {
   return 0;
 }
 
-
-static void* concatenate_rrbs(void* void_input) {
+static void* concatenate_arrays(void *void_input) {
   ConcatArgs *ca = (ConcatArgs *) void_input;
   const uint32_t own_tid = ca->own_tid;
   const uint32_t thread_count = ca->thread_count;
-  RRB **intervals = ca->intervals;
+  IntervalArray **intervals = ca->intervals;
+  uint32_t *maxcat = &ca->max_concat_size[own_tid];
+  *maxcat = 0;
   pthread_barrier_t *barriers = ca->barriers;
 
   // barrier before merging result, to avoid race conditions
@@ -331,16 +319,23 @@ static void* concatenate_rrbs(void* void_input) {
     uint32_t sync_tid = own_tid | sync_mask;
     if (thread_count <= sync_tid) {
       // jump out here, finished.
-      goto concatenate_rrbs_cleanup;
+      goto concatenate_arrays_cleanup;
     }
     pthread_barrier_wait(&barriers[sync_tid]);
     // concatenate data
-    intervals[own_tid] = rrb_concat(intervals[own_tid], intervals[sync_tid]);
+    uint32_t tot_mem_usage = sizeof(Interval) * (intervals[own_tid]->len +
+                                                 intervals[own_tid]->cap +
+                                                 intervals[sync_tid]->len +
+                                                 intervals[sync_tid]->cap) +
+                             3 * sizeof(IntervalArray);
+    *maxcat = MAX(*maxcat, tot_mem_usage);
+    interval_array_concat(intervals[own_tid], intervals[sync_tid]);
+    interval_array_destroy(intervals[sync_tid]);
     sync_mask = sync_mask << 1;
   }
   pthread_barrier_wait(&barriers[own_tid]);
 
- concatenate_rrbs_cleanup:
+ concatenate_arrays_cleanup:
   pthread_barrier_destroy(&barriers[own_tid]);
   return 0;
 }
