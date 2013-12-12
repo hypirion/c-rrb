@@ -131,9 +131,9 @@ struct _DotArray {
   const void **elems;
 };
 
-// refcount not implemented yet:
-#define REFCOUNT(...)
-REFCOUNT(not, yet, used)
+static DotArray* dot_array_create(void);
+static char dot_array_contains(const DotArray *arr, const void *elem);
+static void dot_array_add(DotArray *arr, const void *elem);
 
 static void tree_node_to_dot(DotFile dot, const TreeNode *node, char print_table);
 static void leaf_node_to_dot(DotFile dot, const LeafNode *root);
@@ -991,6 +991,37 @@ const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restr
 /******************************************************************************/
 #ifdef RRB_DEBUG
 
+// Dot Array impl
+
+static DotArray* dot_array_create() {
+  DotArray *arr = GC_MALLOC(sizeof(DotArray));
+  arr->len = 0;
+  arr->cap = 32;
+  arr->elems = GC_MALLOC(arr->cap * sizeof(const void *));
+  return arr;
+}
+
+static char dot_array_contains(const DotArray *arr, const void *elem) {
+  for (uint32_t i = 0; i < arr->len; i++) {
+    if (arr->elems[i] == elem) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void dot_array_add(DotArray *arr, const void *elem) {
+  if (!dot_array_contains(arr, elem)) {
+    // Grow array if needed
+    if (arr->len == arr->cap) {
+      arr->cap *= 2;
+      arr->elems = GC_REALLOC(arr->elems, arr->cap * sizeof(const void *));
+    }
+    arr->elems[arr->len] = elem;
+    arr->len++;
+  }
+}
+
 static int null_counter = 0;
 
 void label_pointer(DotFile dot, const void *node, const char *name) {
@@ -1004,33 +1035,16 @@ void label_pointer(DotFile dot, const void *node, const char *name) {
 }
 
 static char dot_file_contains(const DotFile dot, const void *elem) {
-  for (uint32_t i = 0; i < dot.array->len; i++) {
-    if (dot.array->elems[i] == elem) {
-      return true;
-    }
-  }
-  return false;
+  return dot_array_contains(dot.array, elem);
 }
 
 static void dot_file_add(DotFile dot, const void *elem) {
-  if (!dot_file_contains(dot, elem)) {
-    // Grow array if needed
-    if (dot.array->len == dot.array->cap) {
-      dot.array->cap *= 2;
-      dot.array->elems = GC_REALLOC(dot.array->elems,
-                                    dot.array->cap * sizeof(const void *));
-    }
-    dot.array->elems[dot.array->len] = elem;
-    dot.array->len++;
-  }
+  dot_array_add(dot.array, elem);
 }
 
 DotFile dot_file_create(char *loch) {
   FILE *file = fopen(loch, "w");
-  DotArray *arr = GC_MALLOC(sizeof(DotArray));
-  arr->len = 0;
-  arr->cap = 32;
-  arr->elems = GC_MALLOC(arr->cap * sizeof(const void *));
+  DotArray *arr = dot_array_create();
   fprintf(file, "digraph g {\n  bgcolor=transparent;\n  node [shape=none];\n");
   DotFile dot_file = {.file = file, .array = arr};
   return dot_file;
