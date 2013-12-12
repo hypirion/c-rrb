@@ -70,6 +70,7 @@ void dot_file_close(DotFile dot);
 
 void label_pointer(DotFile dot, const void *node, const char *name);
 void rrb_to_dot(DotFile dot, const RRB *rrb);
+uint32_t rrb_memory_usage(const RRB **rrbs, uint32_t rrb_count);
 
 #endif
 #endif

@@ -76,7 +76,7 @@ struct _RRB {
 
 static const RRB EMPTY_RRB = {.cnt = 0, .shift = 0, .root = NULL};
 
-static RRBSizeTable *size_table_create(uint32_t len);
+static RRBSizeTable* size_table_create(uint32_t len);
 
 static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
                                      TreeNode *right_node, uint32_t right_shift,
@@ -110,7 +110,7 @@ static InternalNode* internal_node_copy(InternalNode *original, uint32_t start,
 static InternalNode* internal_node_new_above1(InternalNode *child);
 static InternalNode* internal_node_new_above(InternalNode *left, InternalNode *right);
 
-static const RRB *slice_right(const RRB *rrb, uint32_t right);
+static const RRB* slice_right(const RRB *rrb, uint32_t right);
 static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
                                   uint32_t right, uint32_t shift,
                                   char has_left);
@@ -120,7 +120,7 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
                                 char has_right);
 
 static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift);
-static RRB* rrb_head_clone(const RRB* original);
+static RRB* rrb_head_clone(const RRB *original);
 
 #ifdef RRB_DEBUG
 #include <stdio.h>
@@ -140,6 +140,7 @@ static void leaf_node_to_dot(DotFile dot, const LeafNode *root);
 static void internal_node_to_dot(DotFile dot, const InternalNode *root, char print_table);
 static void size_table_to_dot(DotFile dot, const InternalNode *node);
 
+static uint32_t node_size(DotArray *arr, const TreeNode *node);
 
 static int concat_count = 0;
 #endif
@@ -391,7 +392,7 @@ static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
 }
 
 static RRBSizeTable* shuffle(InternalNode *all, uint32_t shift, uint32_t *top_len) {
-  RRBSizeTable *table = size_table_create(all->len); // may actually need another slot. FIXME
+  RRBSizeTable *table = size_table_create(all->len);
 
   uint32_t table_len = 0;
   for (uint32_t i = 0; i < all->len; i++) {
@@ -1184,4 +1185,40 @@ static void leaf_node_to_dot(DotFile dot, const LeafNode *root) {
     fprintf(dot.file, "  </tr>\n</table>>];\n");
   }
 }
+
+static uint32_t node_size(DotArray *set, const TreeNode *root) {
+  if (dot_array_contains(set, (const void *) root)) {
+    return 0;
+  }
+  dot_array_add(set, (const void *) root);
+  switch (root->type) {
+  case LEAF_NODE: {
+    const LeafNode *leaf = (const LeafNode *) root;
+    return sizeof(LeafNode) + sizeof(void *) * leaf->len;
+  }
+  case INTERNAL_NODE: {
+    const InternalNode *internal = (const InternalNode *) root;
+    uint32_t node_bytes = sizeof(InternalNode)
+                        + (sizeof(struct InternalNode *) + sizeof(uint32_t))
+                                                             * internal->len;
+    for (uint32_t i = 0; i < internal->len; i++) {
+      node_bytes += node_size(set, (const TreeNode *) internal->child[i]);
+    }
+    return node_bytes;
+  }
+  }
+}
+
+uint32_t rrb_memory_usage(const RRB **rrbs, uint32_t rrb_count) {
+  DotArray *set = dot_array_create();
+  uint32_t sum = 0;
+  for (uint32_t i = 0; i < rrb_count; i++) {
+    if (!dot_array_contains(set, (const void *) rrbs[i])) {
+      dot_array_add(set, (const void *) rrbs[i]);
+      sum += sizeof(RRB) + node_size(set, rrbs[i]->root);
+    }
+  }
+  return sum;
+}
+
 #endif
