@@ -436,16 +436,17 @@ static void* filter_by_term(void *void_input) {
   }
 
   // find all lines containing the search term
-  uint32_t contained_lines = 0;
+  uint32_t *contained_lines = malloc(sizeof(uint32_t));
 
   for (uint32_t line_idx = from; line_idx < to; line_idx++) {
     Interval line = interval_array_nth(lines, line_idx);
     if (substr_contains(&buffer[line.from], line.to - line.from, search_term)) {
-      contained_lines++;
+      (*contained_lines)++;
     }
   }
   
-  intervals[own_tid] = contained_lines;
+  intervals[own_tid] = *contained_lines;
+  free(contained_lines);
   return 0;
 }
 

@@ -4,39 +4,98 @@ CORES=$1
 SEARCH="$2"
 FILE="$3"
 
-DUMMY_OUTPUT="$(mktemp /tmp/dummy-XXXXXXXXXXXXX)"
-ARRAY_OUTPUT="$(mktemp /tmp/array-XXXXXXXXXXXXX)"
-RRB_OUTPUT="$(mktemp /tmp/rrb-XXXXXXXXXXXXX)"
+mkdir -p "$PWD/tmp"
+
+DUMMY_OUTPUT="$PWD/tmp/overhead-$1-$2.dat"
+ARRAY_OUTPUT="$PWD/tmp/array-$1-$2.dat"
+RRB_OUTPUT="$PWD/tmp/rrb-$1-$2.dat"
+
+OUTPUTS=("$DUMMY_OUTPUT" "$ARRAY_OUTPUT" "$RRB_OUTPUT")
+PROGRAMS=('./pgrep_dummy' './pgrep_array' './pgrep_rrb')
 
 ITERATIONS=100
+WARMUP_RUNS=3
 
-for i in `seq 0 $(( $ITERATIONS - 1 ))`; do
-    echo -en '\r'$(( (3*$i + 0) * 100 / (3 * $ITERATIONS) ))'%'
-    ./pgrep_dummy $CORES "$SEARCH" "$FILE" 2>/dev/null >> "$DUMMY_OUTPUT"
-    echo -en '\r'$(( (3*$i + 1) * 100 / (3 * $ITERATIONS) ))'%'
-    ./pgrep_array $CORES "$SEARCH" "$FILE" 2>/dev/null >> "$ARRAY_OUTPUT"
-    echo -en '\r'$(( (3*$i + 2) * 100 / (3 * $ITERATIONS) ))'%'
-    ./pgrep_rrb   $CORES "$SEARCH" "$FILE" 2>/dev/null >> "$RRB_OUTPUT"
-done
+function remaining_runs {
+    local rem=$(( $ITERATIONS * 3 ))
+    for i in 0 1 2; do
+        if [ -f "${OUTPUTS[$i]}" ]; then
+            rem=$(( $rem - `wc -l "${OUTPUTS[$i]}" | cut -f1 -d' '` ))
+        fi
+    done
+    echo $rem
+}
 
-echo -e '\r100%'
+function is_done {
+    if [ -f "$1" ] && [ $(wc -l "$1" | cut -f1 -d' ') -ge $ITERATIONS ]; then
+        return 0
+    else
+        return 1
+    fi
+}
 
-DUMMY_CANDLE="$(mktemp /tmp/dummy-XXXXXXXXXXXXX)"
-ARRAY_CANDLE="$(mktemp /tmp/array-XXXXXXXXXXXXX)"
-RRB_CANDLE="$(mktemp /tmp/rrb-XXXXXXXXXXXXX)"
+function check_done {
+    DONE=1
+    for i in 0 1 2; do
+        if ! is_done ${OUTPUTS[$i]}; then
+            DONE=0
+        fi
+    done
+}
+
+## Check if we've already finished this pass
+check_done
+
+## If we're not done
+if [ $DONE -eq 0 ]; then
+
+    echo "With ${CORES} cores, searching for '"${SEARCH}"'."
+
+    ## Do a warmup
+    for i in `seq 0 $(( $WARMUP_RUNS - 1 ))`; do
+        for j in 0 1 2; do
+            echo -en '\rWarm-up: '$(( (3*$i + $j) * 100 / 9 ))'%'
+            ${PROGRAMS[$i]} $CORES "$SEARCH" "$FILE" &>/dev/null
+        done
+    done
+
+    echo -e '\rWarm-up: Done'
+
+    ## Then keep running until we're done
+    while [ $DONE -eq 0 ]; do
+        for i in 0 1 2; do
+            if ! is_done "${OUTPUTS[$i]}"; then
+                ${PROGRAMS[$i]} $CORES "$SEARCH" "$FILE" 2>/dev/null >> "${OUTPUTS[$i]}"
+            else
+                ## Dummy-run for consistency
+                ${PROGRAMS[$i]} $CORES "$SEARCH" "$FILE" &>/dev/null
+            fi
+            echo -en '\r'$(remaining_runs)' remaining runs. '
+        done
+        check_done
+    done
+    echo -e '\nDone!'
+else
+    echo 'Already finished -- skipping...'
+fi
+
+DUMMY_CANDLE="$PWD/tmp/overhead-candle-$1-$2.dat"
+ARRAY_CANDLE="$PWD/tmp/array-candle-$1-$2.dat"
+RRB_CANDLE="$PWD/tmp/rrb-candle-$1-$2.dat"
 
 cd script
+
+## These are cheap enough to repeat
 ./candlesticks.py "$DUMMY_OUTPUT" > "$DUMMY_CANDLE"
 ./candlesticks.py "$ARRAY_OUTPUT" > "$ARRAY_CANDLE"
 ./candlesticks.py "$RRB_OUTPUT" > "$RRB_CANDLE"
 
-echo script/gen-calculations.sh "$DUMMY_CANDLE" "$ARRAY_CANDLE" "$RRB_CANDLE" 'script/calcs.pdf'
-./gen-calculations.sh "$DUMMY_CANDLE" "$ARRAY_CANDLE" "$RRB_CANDLE" 'calcs.pdf'
-echo script/gen-catenations.sh "$DUMMY_CANDLE" "$ARRAY_CANDLE" "$RRB_CANDLE" 'script/cats.pdf'
-./gen-catenations.sh "$DUMMY_CANDLE" "$ARRAY_CANDLE" "$RRB_CANDLE" 'cats.pdf'
+# if [ ! -f "calcs-$1-$2.pdf" ]; then
+#     ./gen-calculations.sh "$DUMMY_CANDLE" "$ARRAY_CANDLE" "$RRB_CANDLE" "calcs-$1-$2.pdf"
+#     echo script/gen-calculations.sh "$DUMMY_CANDLE" "$ARRAY_CANDLE" "$RRB_CANDLE" "script/calcs-$1-$2.pdf"
+# fi
+# if [ ! -f "cats-$1-$2.pdf" ]; then
+#     ./gen-catenations.sh "$DUMMY_CANDLE" "$ARRAY_CANDLE" "$RRB_CANDLE" "cats-$1-$2.pdf"
+#     echo script/gen-catenations.sh "$DUMMY_CANDLE" "$ARRAY_CANDLE" "$RRB_CANDLE" "script/cats-$1-$2.pdf"
+# fi
 cd ..
-
-# Cleanup
-echo "Candlestick output lies within $DUMMY_CANDLE,
-$ARRAY_CANDLE and $RRB_CANDLE."
-rm $DUMMY_OUTPUT $ARRAY_OUTPUT $RRB_OUTPUT

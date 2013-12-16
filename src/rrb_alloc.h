@@ -21,52 +21,12 @@
  *
  */
 
-#ifndef RRB_H
-#define RRB_H
+#ifndef RRB_ALLOC_H
+#define RRB_ALLOC_H
 
-#include <stdint.h>
+#include <gc/gc.h>
 
-#ifndef RRB_BITS
-#define RRB_BITS 5
-#endif
-#define RRB_BRANCHING (1 << RRB_BITS)
-#define RRB_MASK (RRB_BRANCHING - 1)
-#ifndef RRB_INVARIANT
-#define RRB_INVARIANT 1
-#endif
-#ifndef RRB_EXTRAS
-#define RRB_EXTRAS 2
-#endif
+#define RRB_MALLOC GC_MALLOC
+#define RRB_REALLOC GC_REALLOC
 
-typedef struct _RRB RRB;
-
-const RRB* rrb_create(void);
-
-uint32_t rrb_count(const RRB *rrb);
-void* rrb_nth(const RRB *rrb, uint32_t index);
-const RRB* rrb_pop(const RRB *rrb);
-void* rrb_peek(const RRB *rrb);
-const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt);
-const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restrict elt);
-
-const RRB* rrb_concat(const RRB *left, const RRB *right);
-const RRB* rrb_slice(const RRB *rrb, uint32_t from, uint32_t to);
-
-#ifdef RRB_DEBUG
-
-#include <stdio.h>
-
-typedef struct _DotFile DotFile;
-
-void rrb_to_dot_file(const RRB *rrb, char *loch);
-
-DotFile dot_file_create(char *loch);
-void dot_file_close(DotFile dot);
-
-void label_pointer(DotFile dot, const void *node, const char *name);
-void rrb_to_dot(DotFile dot, const RRB *rrb);
-
-uint32_t rrb_memory_usage(const RRB *const *rrbs, uint32_t rrb_count);
-
-#endif
 #endif

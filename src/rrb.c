@@ -21,7 +21,7 @@
  *
  */
 
-#include <gc/gc.h>
+#include "rrb_alloc.h"
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -125,10 +125,15 @@ static RRB* rrb_head_clone(const RRB *original);
 #ifdef RRB_DEBUG
 #include <stdio.h>
 
-struct _DotArray {
+typedef struct _DotArray {
   uint32_t len;
   uint32_t cap;
   const void **elems;
+} DotArray;
+
+struct _DotFile {
+  FILE *file;
+  DotArray *array;
 };
 
 static DotArray* dot_array_create(void);
@@ -146,13 +151,13 @@ static int concat_count = 0;
 #endif
 
 static RRBSizeTable* size_table_create(uint32_t size) {
-  RRBSizeTable *table = GC_MALLOC(sizeof(RRBSizeTable)
+  RRBSizeTable *table = RRB_MALLOC(sizeof(RRBSizeTable)
                                   + size * sizeof(uint32_t));
   return table;
 }
 
 static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift) {
-  RRB *rrb = GC_MALLOC(sizeof(RRB));
+  RRB *rrb = RRB_MALLOC(sizeof(RRB));
   rrb->root = node;
   rrb->cnt = size;
   rrb->shift = shift;
@@ -160,7 +165,7 @@ static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift) {
 }
 
 static RRB* rrb_head_clone(const RRB* original) {
-  RRB *clone = GC_MALLOC(sizeof(RRB));
+  RRB *clone = RRB_MALLOC(sizeof(RRB));
   memcpy(clone, original, sizeof(RRB));
   return clone;
 }
@@ -170,7 +175,7 @@ const RRB* rrb_create() {
 }
 
 static RRB* rrb_mutable_create() {
-  RRB *rrb = GC_MALLOC(sizeof(RRB));
+  RRB *rrb = RRB_MALLOC(sizeof(RRB));
   return rrb;
 }
 
@@ -184,7 +189,7 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
   else {
     /*
 #ifdef RRB_DEBUG
-    char *str = GC_MALLOC(sizeof(char) * 80);
+    char *str = RRB_MALLOC(sizeof(char) * 80);
     sprintf(str, "img/rrb_concat-%03d.dot", concat_count);
     concat_count++;
     DotFile dot = dot_file_create(str);
@@ -281,13 +286,13 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
 
 static LeafNode* leaf_node_clone(LeafNode *original) {
   size_t size = sizeof(LeafNode) + original->len * sizeof(void *);
-  LeafNode *clone = GC_MALLOC(size);
+  LeafNode *clone = RRB_MALLOC(size);
   memcpy(clone, original, size);
   return clone;
 }
 
 static LeafNode* leaf_node_create(uint32_t len) {
-  LeafNode *node = GC_MALLOC(sizeof(LeafNode) + len * sizeof(void *));
+  LeafNode *node = RRB_MALLOC(sizeof(LeafNode) + len * sizeof(void *));
   node->type = LEAF_NODE;
   node->len = len;
   return node;
@@ -302,7 +307,7 @@ static LeafNode* leaf_node_merge(LeafNode *left, LeafNode *right) {
 }
 
 static InternalNode* internal_node_create(uint32_t len) {
-  InternalNode *node = GC_MALLOC(sizeof(InternalNode)
+  InternalNode *node = RRB_MALLOC(sizeof(InternalNode)
                               + len * sizeof(InternalNode *));
   node->type = INTERNAL_NODE;
   node->len = len;
@@ -350,7 +355,7 @@ static InternalNode* internal_node_merge(InternalNode *left, InternalNode *centr
 
 static InternalNode* internal_node_clone(const InternalNode *original) {
   size_t size = sizeof(InternalNode) + original->len * sizeof(InternalNode *);
-  InternalNode *clone = GC_MALLOC(size);
+  InternalNode *clone = RRB_MALLOC(size);
   memcpy(clone, original, size);
   return clone;
 }
@@ -611,7 +616,6 @@ static uint32_t size_sub_trie(TreeNode *node, uint32_t shift) {
   }
 }
 
-// TODO: Optimize this
 const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
   LeafNode *right_root = leaf_node_create(1);
   right_root->child[0] = elt;
@@ -995,10 +999,10 @@ const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restr
 // Dot Array impl
 
 static DotArray* dot_array_create() {
-  DotArray *arr = GC_MALLOC(sizeof(DotArray));
+  DotArray *arr = RRB_MALLOC(sizeof(DotArray));
   arr->len = 0;
   arr->cap = 32;
-  arr->elems = GC_MALLOC(arr->cap * sizeof(const void *));
+  arr->elems = RRB_MALLOC(arr->cap * sizeof(const void *));
   return arr;
 }
 
@@ -1016,7 +1020,7 @@ static void dot_array_add(DotArray *arr, const void *elem) {
     // Grow array if needed
     if (arr->len == arr->cap) {
       arr->cap *= 2;
-      arr->elems = GC_REALLOC(arr->elems, arr->cap * sizeof(const void *));
+      arr->elems = RRB_REALLOC(arr->elems, arr->cap * sizeof(const void *));
     }
     arr->elems[arr->len] = elem;
     arr->len++;
@@ -1209,7 +1213,7 @@ static uint32_t node_size(DotArray *set, const TreeNode *root) {
   }
 }
 
-uint32_t rrb_memory_usage(const RRB **rrbs, uint32_t rrb_count) {
+uint32_t rrb_memory_usage(const RRB *const *rrbs, uint32_t rrb_count) {
   DotArray *set = dot_array_create();
   uint32_t sum = 0;
   for (uint32_t i = 0; i < rrb_count; i++) {

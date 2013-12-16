@@ -48,7 +48,7 @@ typedef struct {
   uint32_t file_size;
   uint32_t own_tid;
   uint32_t thread_count;
-  RRB **intervals;
+  const RRB **intervals;
 } LineSplitArgs;
 
 typedef struct {
@@ -56,14 +56,14 @@ typedef struct {
   char *search_term;
   uint32_t own_tid;
   uint32_t thread_count;
-  RRB *lines;
-  RRB **intervals;
+  const RRB *lines;
+  const RRB **intervals;
 } FilterArgs;
 
 typedef struct {
   uint32_t own_tid;
   uint32_t thread_count;
-  RRB **intervals;
+  const RRB **intervals;
   uint32_t *max_concat_size;
   pthread_barrier_t *barriers;
 } ConcatArgs;
@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
     // Find all lines
     pthread_t *tid = malloc(thread_count * sizeof(pthread_t));
     LineSplitArgs *lsa = malloc(thread_count * sizeof(LineSplitArgs));
-    RRB **intervals = GC_MALLOC(thread_count * sizeof(RRB *));
+    const RRB **intervals = GC_MALLOC(thread_count * sizeof(RRB *));
 
     for (uint32_t i = 0; i < thread_count; i++) {
       LineSplitArgs arguments =
@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
       pthread_join(tid[i], NULL);
     }
     
-    RRB *lines = intervals[0];
+    const RRB *lines = intervals[0];
     // Found all lines, now onto searching in each list
 
     fprintf(stderr, "%d newlines\n", rrb_count(intervals[0]));
@@ -240,7 +240,7 @@ static void* split_to_lines(void *void_input) {
   const uint32_t own_tid = lsa->own_tid;
   const uint32_t file_size = lsa->file_size;
   const uint32_t thread_count = lsa->thread_count;
-  RRB **intervals = lsa->intervals;
+  const RRB **intervals = lsa->intervals;
 
   // calculate the interval to compute for
   uint32_t partition_size = file_size / thread_count;
@@ -251,7 +251,7 @@ static void* split_to_lines(void *void_input) {
   }
 
   // find the lines
-  RRB *lines = rrb_create();
+  const RRB *lines = rrb_create();
 
   // rewind to start of line
   uint32_t line_start = from;
@@ -277,8 +277,8 @@ static void* filter_by_term(void *void_input) {
   const char *search_term = fa->search_term;
   const uint32_t own_tid = fa->own_tid;
   const uint32_t thread_count = fa->thread_count;
-  RRB *lines = fa->lines;
-  RRB **intervals = fa->intervals;
+  const RRB *lines = fa->lines;
+  const RRB **intervals = fa->intervals;
 
   // calculate the lines to compute for
   uint32_t partition_size = rrb_count(lines) / thread_count;
@@ -289,10 +289,10 @@ static void* filter_by_term(void *void_input) {
   }
 
   // find all lines containing the search term
-  RRB *contained_lines = rrb_create();
+  const RRB *contained_lines = rrb_create();
 
   for (uint32_t line_idx = from; line_idx < to; line_idx++) {
-    Interval line = (Interval) uint64_t_to_interval((uint64_t) rrb_nth(lines, line_idx));
+    Interval line = uint64_t_to_interval((uint64_t) rrb_nth(lines, line_idx));
     if (substr_contains(&buffer[line.from], line.to - line.from, search_term)) {
       contained_lines = rrb_push(contained_lines, (void *) interval_to_uint64_t(line));
     }
@@ -307,7 +307,7 @@ static void* concatenate_rrbs(void* void_input) {
   ConcatArgs *ca = (ConcatArgs *) void_input;
   const uint32_t own_tid = ca->own_tid;
   const uint32_t thread_count = ca->thread_count;
-  RRB **intervals = ca->intervals;
+  const RRB **intervals = ca->intervals;
   uint32_t *maxcat = &ca->max_concat_size[own_tid];
   *maxcat = 0;
   pthread_barrier_t *barriers = ca->barriers;
@@ -322,7 +322,7 @@ static void* concatenate_rrbs(void* void_input) {
     }
     pthread_barrier_wait(&barriers[sync_tid]);
     // concatenate data
-    RRB **trees = GC_MALLOC(3 * sizeof(RRB *));
+    const RRB **trees = GC_MALLOC(3 * sizeof(RRB *));
     trees[0] = intervals[own_tid];
     trees[1] = intervals[sync_tid];
     intervals[own_tid] = rrb_concat(intervals[own_tid], intervals[sync_tid]);
