@@ -26,6 +26,13 @@ AC_SUBST([DEBUG_VARS])
 
 AC_PROG_CC_STDC
 
+AC_ARG_WITH([branching],
+        [AS_HELP_STRING([--with-branching=bits : number of bits per branching])],
+        [RRB_BITS=$withval],
+        [RRB_BITS=5])
+
+AC_SUBST([RRB_BITS])
+
 AC_CHECK_LIB([gc], [GC_malloc], [GCLIB=-lgc],
              AC_MSG_ERROR([Please install libgc in order to compile librrb.]))
 AC_SUBST([GCLIB])
