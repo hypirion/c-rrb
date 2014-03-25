@@ -5,14 +5,19 @@ librrb_la_SOURCES = rrb.c
 librrb_la_CPPFLAGS = -DRRB_DEBUG -DRRB_BITS=$(RRB_BITS)
 librrb_la_CFLAGS = $(DEBUG_VARS)
 
-rrb.c: generated/rrb_nth.c generated/rrb_update.c
+# Handling direct append insertion
+RRB_PUSH_DEP=
 
-generated/rrb_nth.c:
-	python generated/rrb_nth.py $(RRB_BITS) > generated/rrb_nth.c
+if DIRECT_APPEND
+RRB_PUSH_DEP += generated/rrb_push.c
+endif
 
-generated/rrb_update.c:
-	python generated/rrb_update.py $(RRB_BITS) > generated/rrb_update.c
+rrb.c: generated/rrb_nth.c generated/rrb_update.c $(RRB_PUSH_DEP)
+
+generated/%.c: generated/%.py
+	python $< $(RRB_BITS) > $@
 
 clean-local:
 	-rm -f generated/rrb_nth.c
 	-rm -f generated/rrb_update.c
+	-rm -f generated/rrb_push.c
