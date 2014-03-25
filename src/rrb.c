@@ -74,9 +74,11 @@ struct _RRB {
   TreeNode *root;
 };
 
+// perhaps point to an empty leaf to remove edge cases?
 static const RRB EMPTY_RRB = {.cnt = 0, .shift = 0, .root = NULL};
 
 static RRBSizeTable* size_table_create(uint32_t len);
+static RRBSizeTable* size_table_clone(const RRBSizeTable* original, uint32_t len);
 
 static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
                                      TreeNode *right_node, uint32_t right_shift,
@@ -103,6 +105,7 @@ static LeafNode* leaf_node_merge(LeafNode *left_leaf, LeafNode *right_leaf);
 
 static InternalNode* internal_node_create(uint32_t len);
 static InternalNode* internal_node_clone(const InternalNode *original);
+static InternalNode* internal_node_inc(const InternalNode *original);
 static InternalNode* internal_node_merge(InternalNode *left, InternalNode *centre,
                                          InternalNode *right);
 static InternalNode* internal_node_copy(InternalNode *original, uint32_t start,
@@ -156,6 +159,14 @@ static RRBSizeTable* size_table_create(uint32_t size) {
   return table;
 }
 
+static RRBSizeTable* size_table_clone(const RRBSizeTable *original,
+                                      uint32_t len) {
+  RRBSizeTable *clone = RRB_MALLOC(sizeof(RRBSizeTable)
+                                   + len * sizeof(uint32_t));
+  memcpy(&clone->size, &original->size, sizeof(uint32_t) * len);
+  return clone;
+}
+
 static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift) {
   RRB *rrb = RRB_MALLOC(sizeof(RRB));
   rrb->root = node;
@@ -207,7 +218,7 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
     // Is there enough space in a leaf node? If so, pick that leaf node as root.
     if ((left->shift == RRB_BRANCHING) && (right->shift == RRB_BRANCHING)
         && ((left->cnt + right->cnt) <= RRB_BRANCHING)) {
-      new_rrb->root = (TreeNode *) root_candidate->child[0]; // memleak
+      new_rrb->root = (TreeNode *) root_candidate->child[0];
       new_rrb->shift = find_shift(new_rrb->root);
     }
     else {
@@ -365,6 +376,15 @@ static InternalNode* internal_node_copy(InternalNode *original, uint32_t start,
   InternalNode *copy = internal_node_create(len);
   memcpy(copy->child, &original->child[start], len * sizeof(InternalNode *));
   return copy;
+}
+
+static InternalNode* internal_node_inc(const InternalNode *original) {
+  size_t size = sizeof(InternalNode) + original->len * sizeof(InternalNode *);
+  InternalNode *clone = RRB_MALLOC(size + sizeof(InternalNode *));
+  memcpy(clone, original, size);
+  // update length
+  clone->len++;
+  return clone;
 }
 
 static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
@@ -616,12 +636,231 @@ static uint32_t size_sub_trie(TreeNode *node, uint32_t shift) {
   }
 }
 
+#ifdef DIRECT_APPEND
+
+static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrc, const uint32_t k);
+static void** append_empty(InternalNode **to_set, uint32_t pos, uint32_t empty_height);
+
+const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
+  RRB *new_rrb = rrb_head_clone(rrb);
+  new_rrb->cnt++;
+
+  // small check if the rrb is empty. Should be somehow be incorporated into
+  // the algorithm instead of being an extreme edge case.
+  if (rrb->cnt == 0) {
+    LeafNode *leaf = leaf_node_create(1);
+    leaf->child[0] = elt;
+    new_rrb->shift = RRB_BRANCHING;
+    new_rrb->root = (TreeNode *) leaf;
+    return new_rrb;
+  }
+  // Copyable count starts here
+
+  // TODO: Can find last rightmost jump in constant time for pvec subvecs:
+  // use the fact that (index & large_mask) == 1 << (RRB_BITS * H) - 1 -> 0 etc.
+  uint32_t index = rrb->cnt;
+
+  uint32_t nodes_to_copy = 0;
+  uint32_t nodes_visited = 0;
+  uint32_t pos = 0; // pos is the position we insert empty nodes in the bottom
+                    // copyable node (or the element, if we can copy the leaf)
+  const InternalNode *current = (const InternalNode *) rrb->root;
+
+  // TODO: need to change rrb->shift to actual shift -- otherwise this will be
+  // very very slow
+  uint32_t actual_shift = 0;
+  for (uint32_t i = RRB_BRANCHING; i != rrb->shift;
+       actual_shift += RRB_BITS, i *= RRB_BRANCHING);
+
+  // checking all non-leaf nodes
+  while (actual_shift != 0) {
+    // calculate child index
+    uint32_t child_index;
+    if (current->size_table == NULL) {
+      // some check here to ensure we're not overflowing the pvec subvec.
+      // important to realise that this only needs to be done once in a better
+      // impl, the same way the size_table check only has to be done until it's
+      // false.
+      const uint32_t prev_actual_shift = actual_shift + RRB_BITS;
+      if (index >> prev_actual_shift > 0) {
+        nodes_visited++; // this could possibly be done earlier in teh code.
+        goto copyable_count_end;
+      }
+      child_index = (index >> actual_shift) & RRB_MASK;
+      // index filtering is not necessary when the check above is performed at
+      // most once.
+      index &= ~(RRB_MASK << actual_shift);
+    }
+    else {
+      // no need for sized_pos here, luckily.
+      child_index = current->len - 1;
+      // Decrement index
+      if (child_index != 0) {
+        index -= current->size_table->size[child_index-1];
+      }
+    }
+    nodes_visited++;
+    if (child_index < RRB_MASK) {
+      nodes_to_copy = nodes_visited;
+      pos = child_index;
+    }
+
+    current = current->child[child_index];
+    // This will only happen in a pvec subtree
+    if (current == NULL) {
+      nodes_to_copy = nodes_visited;
+      pos = child_index;
+
+      // if next element we're looking at is null, we can copy all above. Good
+      // times.
+      goto copyable_count_end;
+    }
+    actual_shift -= RRB_BITS;
+  }
+  // if we're here, we're at the leaf element, which is `current`
+  {
+    // no need to even use index here: We know it'll be placed at current->len,
+    // if there's enough space. That check is easy.
+    nodes_visited++;
+    if (current->len < RRB_BRANCHING) {
+      nodes_to_copy = nodes_visited;
+      pos = current->len;
+    }
+  }
+
+ copyable_count_end:
+  // GURRHH, nodes_visited is not yet handled nicely. for loop down to get
+  // nodes_visited set straight.
+  while (actual_shift > 0) {
+    nodes_visited++;
+    actual_shift -= RRB_BITS;
+  }
+
+  // Increasing height of tree.
+  if (nodes_to_copy == 0) {
+    InternalNode *new_root = internal_node_create(2);
+    new_root->child[0] = (InternalNode *) rrb->root;
+    new_rrb->root = (TreeNode *) new_root;
+    new_rrb->shift *= RRB_BRANCHING;
+
+    // create size table if the original rrb root has a size table.
+    if (rrb->root->type != LEAF_NODE &&
+        ((const InternalNode *)rrb->root)->size_table != NULL) {
+      RRBSizeTable *table = size_table_create(2);
+      table->size[0] = rrb->cnt;
+      table->size[1] = rrb->cnt + 1; // appending only one, so only one more.
+      new_root->size_table = table;
+    }
+
+    // nodes visited == original rrb tree height. Nodes visited > 0.
+
+    void **to_set = append_empty(&((InternalNode *) new_rrb->root)->child[1], 1,
+                                 nodes_visited);
+    *to_set = (void *) elt;
+  }
+  else {
+    InternalNode **node = copy_first_k(rrb, new_rrb, nodes_to_copy);
+    void **to_set = append_empty(node, pos, nodes_visited - nodes_to_copy);
+    *to_set = (void *) elt;
+  }
+
+  return new_rrb;
+}
+
+/**
+ * Ramblings of a madman:
+ *
+ * - Height should be shift or height, not max element size
+ * - copy_first_k returns a pointer to the next pointer to set
+ * - append_empty now returns a pointer to the *void we're supposed to set
+ **/
+
+InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k) {
+  const InternalNode *current = (const InternalNode *) rrb->root;
+  InternalNode **to_set = (InternalNode **) &new_rrb->root;
+  uint32_t index = rrb->cnt;
+
+  // TODO: again, need to change rrb->shift to actual shift -- otherwise this
+  // will be very very slow
+  uint32_t actual_shift = 0;
+  for (uint32_t j = RRB_BRANCHING; j != rrb->shift;
+       actual_shift += RRB_BITS, j *= RRB_BRANCHING);
+
+  // Copy all non-leaf nodes first. Happens when shift > RRB_BRANCHING
+  uint32_t i = 1;
+  while (i <= k && actual_shift != 0) {
+    // First off, copy current node and stick it in.
+    InternalNode *new_current;
+    if (i != k) {
+      new_current = internal_node_clone(current);
+    }
+    else { // increment size of last elt -- will only happen if we append empties
+      new_current = internal_node_inc(current);
+    }
+    *to_set = new_current;
+
+    // calculate child index
+    uint32_t child_index;
+    if (current->size_table == NULL) {
+      child_index = (index >> actual_shift) & RRB_MASK;
+    }
+    else {
+      // no need for sized_pos here, luckily.
+      child_index = current->len - 1;
+      // Decrement index
+      if (child_index != 0) {
+        index -= current->size_table->size[child_index-1];
+      }
+
+      // Increment size table -- happens only when there actually is one
+      new_current->size_table = size_table_clone(current->size_table, current->len);
+      new_current->size_table->size[child_index]++;
+    }
+    to_set = &new_current->child[child_index];
+    current = current->child[child_index];
+
+    i++;
+    actual_shift -= RRB_BITS;
+  }
+
+  // check if we need to copy any leaf nodes. This is actually very likely to
+  // happen (31/32 amortized)
+  if (i == k) {
+    // copy and increase leaf node size by one
+    LeafNode *leaf = leaf_node_create(current->len + 1);
+    memcpy(&leaf->child[0], ((const LeafNode *) current)->child,
+           current->len * sizeof(void *));
+    *to_set = (InternalNode *) leaf;
+  }
+  return to_set;
+}
+
+void** append_empty(InternalNode **to_set, uint32_t pos, uint32_t empty_height) {
+  if (0 < empty_height) {
+    LeafNode *leaf = leaf_node_create(1);
+    InternalNode *empty = (InternalNode *) leaf;
+    for (uint32_t i = 1; i < empty_height; i++) {
+      InternalNode *new_empty = internal_node_create(1);
+      new_empty->child[0] = empty;
+      empty = new_empty;
+    }
+    // Right, this root node must be one larger, otherwise segfault
+    *to_set = empty;
+    return &leaf->child[0];
+  }
+  else {
+    return &((*((LeafNode **)to_set))->child[pos]);
+  }
+}
+
+#else
 const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
   LeafNode *right_root = leaf_node_create(1);
   right_root->child[0] = elt;
   const RRB* right = rrb_head_create((TreeNode *) right_root, 1, RRB_BRANCHING);
   return rrb_concat(rrb, right);
 }
+#endif
 
 static uint32_t sized_pos(const InternalNode *node, uint32_t *index,
                           uint32_t sp) {

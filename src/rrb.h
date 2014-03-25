@@ -26,6 +26,13 @@
 
 #include <stdint.h>
 
+#ifndef HAVE_CONFIG_H
+#warning "You don't seem to use config.h -- most efficient options are picked."
+#define DIRECT_APPEND
+#else
+#include <config.h>
+#endif
+
 #ifndef RRB_BITS
 #define RRB_BITS 5
 #endif
