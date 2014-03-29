@@ -90,18 +90,18 @@ static const RRB EMPTY_RRB = {.cnt = 0, .shift = 0, .root = NULL};
 static RRBSizeTable* size_table_create(uint32_t len);
 static RRBSizeTable* size_table_clone(const RRBSizeTable* original, uint32_t len);
 
-static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
-                                     TreeNode *right_node, uint32_t right_shift,
+static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_max_size,
+                                     TreeNode *right_node, uint32_t right_max_size,
                                      char is_top);
 static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
-                               InternalNode *right, uint32_t shift,
+                               InternalNode *right, uint32_t max_size,
                                char is_top);
 static RRBSizeTable* shuffle(InternalNode *all, uint32_t shift, uint32_t *tlen);
 static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
-                                 uint32_t slen, uint32_t shift);
+                                 uint32_t slen, uint32_t max_size);
 static uint32_t find_shift(TreeNode *node);
-static InternalNode* set_sizes(InternalNode *node, uint32_t shift);
-static uint32_t size_slot(TreeNode *node, uint32_t shift);
+static InternalNode* set_sizes(InternalNode *node, uint32_t max_size);
+static uint32_t size_slot(TreeNode *node, uint32_t max_size);
 static uint32_t max_size_to_shift(uint32_t size); // TODO: optimize away?
 static uint32_t size_sub_trie(TreeNode *node, uint32_t shift);
 static uint32_t sized_pos(const InternalNode *node, uint32_t *index,
@@ -124,12 +124,12 @@ static InternalNode* internal_node_new_above1(InternalNode *child);
 static InternalNode* internal_node_new_above(InternalNode *left, InternalNode *right);
 
 static const RRB* slice_right(const RRB *rrb, uint32_t right);
-static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
-                                  uint32_t right, uint32_t shift,
+static TreeNode* slice_right_rec(uint32_t *total_max_size, const TreeNode *root,
+                                  uint32_t right, uint32_t max_size,
                                   char has_left);
 static const RRB* slice_left(const RRB *rrb, uint32_t left);
-static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
-                                uint32_t left, uint32_t shift,
+static TreeNode* slice_left_rec(uint32_t *total_max_size, const TreeNode *root,
+                                uint32_t left, uint32_t max_size,
                                 char has_right);
 
 static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift);
@@ -249,33 +249,33 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
   }
 }
 
-static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
-                                     TreeNode *right_node, uint32_t right_shift,
+static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_max_size,
+                                     TreeNode *right_node, uint32_t right_max_size,
                                      char is_top) {
-  if (left_shift > right_shift) {
+  if (left_max_size > right_max_size) {
     // Left tree is higher than right tree
     InternalNode *left_internal = (InternalNode *) left_node;
     InternalNode *centre_node =
       concat_sub_tree((TreeNode *) left_internal->child[left_internal->len - 1],
-                      left_shift / RRB_BRANCHING,
-                      right_node, right_shift,
+                      left_max_size / RRB_BRANCHING,
+                      right_node, right_max_size,
                       false);
-    return rebalance(left_internal, centre_node, NULL, left_shift, is_top);
+    return rebalance(left_internal, centre_node, NULL, left_max_size, is_top);
   }
   // If this can be compacted with the block above, we may gain speedups.
-  else if (left_shift < right_shift) {
+  else if (left_max_size < right_max_size) {
     InternalNode *right_internal = (InternalNode *) right_node;
     InternalNode *centre_node =
-      concat_sub_tree(left_node, left_shift,
+      concat_sub_tree(left_node, left_max_size,
                       (TreeNode *) right_internal->child[0],
-                      right_shift / RRB_BRANCHING,
+                      right_max_size / RRB_BRANCHING,
                       false);
-    return rebalance(NULL, centre_node, right_internal, right_shift, is_top);
+    return rebalance(NULL, centre_node, right_internal, right_max_size, is_top);
     // ^ memleak, centre node may be thrown away.
   }
   else { // we have same height
 
-    if (left_shift == RRB_BRANCHING) { // We're dealing with leaf nodes
+    if (left_max_size == RRB_BRANCHING) { // We're dealing with leaf nodes
       LeafNode *left_leaf = (LeafNode *) left_node;
       LeafNode *right_leaf = (LeafNode *) right_node;
       if (is_top && (left_leaf->len + right_leaf->len) <= RRB_BRANCHING) {
@@ -295,11 +295,11 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
       InternalNode *right_internal = (InternalNode *) right_node;
       InternalNode *centre_node =
         concat_sub_tree((TreeNode *) left_internal->child[left_internal->len - 1],
-                        left_shift / RRB_BRANCHING,
+                        left_max_size / RRB_BRANCHING,
                         (TreeNode *) right_internal->child[0],
-                        right_shift / RRB_BRANCHING,
+                        right_max_size / RRB_BRANCHING,
                         false);
-      return rebalance(left_internal, centre_node, right_internal, left_shift,
+      return rebalance(left_internal, centre_node, right_internal, left_max_size,
                        is_top);
     }
   }
@@ -398,20 +398,20 @@ static InternalNode* internal_node_inc(const InternalNode *original) {
 }
 
 static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
-                               InternalNode *right, uint32_t shift,
+                               InternalNode *right, uint32_t max_size,
                                char is_top) {
   InternalNode *all = internal_node_merge(left, centre, right);
   // top_len is children count of the internal node returned.
   uint32_t top_len; // populated through pointer manipulation.
   // TODO: We return a struct here, really. Makes stuff easier to reason about.
   //       Like, honestly.
-  RRBSizeTable *table = shuffle(all, shift, &top_len);
+  RRBSizeTable *table = shuffle(all, max_size, &top_len);
 
   // all may leak out here.
-  InternalNode *new_all = copy_across(all, table, top_len, shift);
+  InternalNode *new_all = copy_across(all, table, top_len, max_size);
   if (top_len <= RRB_BRANCHING) {
     if (is_top == false) {
-      return internal_node_new_above1(set_sizes(new_all, shift));
+      return internal_node_new_above1(set_sizes(new_all, max_size));
     }
     else {
       return new_all;
@@ -421,17 +421,17 @@ static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
     InternalNode *new_left = internal_node_copy(new_all, 0, RRB_BRANCHING);
     InternalNode *new_right = internal_node_copy(new_all, RRB_BRANCHING,
                                                  top_len - RRB_BRANCHING);
-    return internal_node_new_above(set_sizes(new_left, shift),
-                                   set_sizes(new_right, shift));
+    return internal_node_new_above(set_sizes(new_left, max_size),
+                                   set_sizes(new_right, max_size));
   }
 }
 
-static RRBSizeTable* shuffle(InternalNode *all, uint32_t shift, uint32_t *top_len) {
+static RRBSizeTable* shuffle(InternalNode *all, uint32_t max_size, uint32_t *top_len) {
   RRBSizeTable *table = size_table_create(all->len);
 
   uint32_t table_len = 0;
   for (uint32_t i = 0; i < all->len; i++) {
-    uint32_t size = size_slot((TreeNode *) all->child[i], shift / RRB_BRANCHING);
+    uint32_t size = size_slot((TreeNode *) all->child[i], max_size / RRB_BRANCHING);
     table->size[i] = size;
     table_len += size;
   }
@@ -468,14 +468,14 @@ static RRBSizeTable* shuffle(InternalNode *all, uint32_t shift, uint32_t *top_le
 }
 
 static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
-                                 uint32_t slen, uint32_t shift) {
+                                 uint32_t slen, uint32_t max_size) {
   // the all vector doesn't have sizes set yet.
 
   InternalNode *new_all = internal_node_create(slen);
   uint32_t idx = 0;
   uint32_t offset = 0;
 
-  if (shift == RRB_BRANCHING * RRB_BRANCHING) {
+  if (max_size == RRB_BRANCHING * RRB_BRANCHING) {
     uint32_t i = 0;
     while (i < slen) {
       uint32_t new_size = sizes->size[i];
@@ -569,7 +569,7 @@ static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
           rta = aa;
         }
 
-        rta = set_sizes(rta, shift / RRB_BRANCHING);
+        rta = set_sizes(rta, max_size / RRB_BRANCHING);
         idx = new_idx;
         offset = offs;
         new_all->child[i] = rta;
@@ -591,12 +591,12 @@ static uint32_t find_shift(TreeNode *node) {
   }
 }
 
-static InternalNode* set_sizes(InternalNode *node, uint32_t shift) {
+static InternalNode* set_sizes(InternalNode *node, uint32_t max_size) {
   uint32_t sum = 0;
   RRBSizeTable *table = size_table_create(node->len);
 
   for (uint32_t i = 0; i < node->len; i++) {
-    sum += size_sub_trie((TreeNode *) node->child[i], shift / RRB_BRANCHING);
+    sum += size_sub_trie((TreeNode *) node->child[i], max_size / RRB_BRANCHING);
     table->size[i] = sum;
   }
   node->size_table = table;
@@ -604,8 +604,8 @@ static InternalNode* set_sizes(InternalNode *node, uint32_t shift) {
 }
 
 // TODO: Optimize this away by adding in a header struct
-static uint32_t size_slot(TreeNode *node, uint32_t shift) {
-  if (shift > RRB_BRANCHING) { // internal node
+static uint32_t size_slot(TreeNode *node, uint32_t max_size) {
+  if (max_size > RRB_BRANCHING) { // internal node
     return ((InternalNode *) node)->len;
   }
   else { // leaf node
@@ -622,19 +622,19 @@ static uint32_t max_size_to_shift(uint32_t max_size) {
   return shift;
 }
 
-static uint32_t size_sub_trie(TreeNode *node, uint32_t shift) {
-  if (shift > RRB_BRANCHING) {
+static uint32_t size_sub_trie(TreeNode *node, uint32_t max_size) {
+  if (max_size > RRB_BRANCHING) {
     InternalNode *internal = (InternalNode *) node;
     if (internal->size_table == NULL) {
       uint32_t len = internal->len;
-      uint32_t child_shift = shift / RRB_BRANCHING;
+      uint32_t child_max_size = max_size / RRB_BRANCHING;
       // TODO: for loopify recursive calls
       /* We're not sure how many are in the last child, so look it up */
       uint32_t last_size =
-        size_sub_trie((TreeNode *) internal->child[len - 1], child_shift);
+        size_sub_trie((TreeNode *) internal->child[len - 1], child_max_size);
       /* We know all but the last ones are filled, and they have child_shift
          elements in them. */
-      return child_shift * (len - 1) + last_size;
+      return child_max_size * (len - 1) + last_size;
     }
     else {
       return internal->size_table->size[internal->len - 1];
@@ -912,24 +912,24 @@ static const RRB* slice_right(const RRB *rrb, uint32_t right) {
   }
 }
 
-static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
-                                 uint32_t right, uint32_t shift,
+static TreeNode* slice_right_rec(uint32_t *total_max_size, const TreeNode *root,
+                                 uint32_t right, uint32_t max_size,
                                  char has_left) {
-  const uint32_t subshift = shift / RRB_BRANCHING;
-  uint32_t subidx = right / subshift;
-  if (shift > RRB_BRANCHING) { // Dispatch on type instead?
+  const uint32_t sub_max_size = max_size / RRB_BRANCHING;
+  uint32_t subidx = right / sub_max_size;
+  if (max_size > RRB_BRANCHING) { // Dispatch on type instead?
     const InternalNode *internal_root = (InternalNode *) root;
     if (internal_root->size_table == NULL) {
       TreeNode *right_hand_node =
-        slice_right_rec(total_shift,
+        slice_right_rec(total_max_size,
                         (TreeNode *) internal_root->child[subidx],
-                        right - (subidx * subshift), subshift,
+                        right - (subidx * sub_max_size), sub_max_size,
                         (subidx != 0) | has_left);
       if (subidx == 0) {
         if (has_left) {
           InternalNode *right_hand_parent = internal_node_create(1);
           right_hand_parent->child[0] = (InternalNode *) right_hand_node;
-          *total_shift = shift;
+          *total_max_size = max_size;
           return (TreeNode *) right_hand_parent;
         }
         else { // if (!has_left)
@@ -941,7 +941,7 @@ static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
         memcpy(sliced_root->child, internal_root->child,
                subidx * sizeof(InternalNode *));
         sliced_root->child[subidx] = (InternalNode *) right_hand_node;
-        *total_shift = shift;
+        *total_max_size = max_size;
         return (TreeNode *) sliced_root;
       }
     }
@@ -958,8 +958,8 @@ static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
 
       const TreeNode *child = (TreeNode *) internal_root->child[subidx];
       const TreeNode *right_hand_node =
-        slice_right_rec(total_shift, child, idx,
-                        subshift, (subidx != 0) | has_left);
+        slice_right_rec(total_max_size, child, idx,
+                        sub_max_size, (subidx != 0) | has_left);
       if (subidx == 0) {
         if (has_left) {
           // As there is one above us, must place the right hand node in a
@@ -971,7 +971,7 @@ static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
           right_hand_parent->size_table = right_hand_table;
           right_hand_parent->child[0] = (InternalNode *) right_hand_node;
 
-          *total_shift = shift;
+          *total_max_size = max_size;
           return (TreeNode *) right_hand_parent;
         }
         else { // if (!has_left)
@@ -990,7 +990,7 @@ static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
         sliced_root->size_table = sliced_table;
         sliced_root->child[subidx] = (InternalNode *) right_hand_node;
 
-        *total_shift = shift;
+        *total_max_size = max_size;
         return (TreeNode *) sliced_root;
       }
     }
@@ -1001,7 +1001,7 @@ static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
     LeafNode *left_vals = leaf_node_create(subidx + 1);
 
     memcpy(left_vals->child, leaf_root->child, (subidx + 1) * sizeof(void *));
-    *total_shift = shift;
+    *total_max_size = max_size;
     return (TreeNode *) left_vals;
   }
 }
@@ -1014,8 +1014,8 @@ const RRB* slice_left(const RRB *rrb, uint32_t left) {
     RRB *new_rrb = rrb_mutable_create();
     // TODO: Directly inject shift
     uint32_t max_size = RRB_MAX_SIZE(new_rrb);
-    TreeNode *root = slice_left_rec(&max_size,
-                                    rrb->root, left, RRB_MAX_SIZE(rrb), false);
+    TreeNode *root = slice_left_rec(&max_size, rrb->root, left,
+                                    RRB_MAX_SIZE(rrb), false);
     new_rrb->shift = max_size_to_shift(max_size);
     new_rrb->cnt = rrb->cnt - left;
     new_rrb->root = root;
@@ -1026,16 +1026,16 @@ const RRB* slice_left(const RRB *rrb, uint32_t left) {
   }
 }
 
-static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
-                                uint32_t left, uint32_t shift,
+static TreeNode* slice_left_rec(uint32_t *total_max_size, const TreeNode *root,
+                                uint32_t left, uint32_t max_size,
                                 char has_right) {
-  const uint32_t subshift = shift / RRB_BRANCHING;
-  uint32_t subidx = left / subshift;
-  if (shift > RRB_BRANCHING) {
+  const uint32_t sub_max_size = max_size / RRB_BRANCHING;
+  uint32_t subidx = left / sub_max_size;
+  if (max_size > RRB_BRANCHING) {
     const InternalNode *internal_root = (InternalNode *) root;
     uint32_t idx = left;
     if (internal_root->size_table == NULL) {
-      idx -= subidx * subshift;
+      idx -= subidx * sub_max_size;
     }
     else { // if (internal_root->size_table != NULL)
       const RRBSizeTable *table = internal_root->size_table;
@@ -1051,13 +1051,13 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
     const uint32_t last_slot = internal_root->len - 1;
     const TreeNode *child = (TreeNode *) internal_root->child[subidx];
     TreeNode *left_hand_node =
-      slice_left_rec(total_shift, child, idx, subshift,
+      slice_left_rec(total_max_size, child, idx, sub_max_size,
                      (subidx != last_slot) | has_right);
     if (subidx == last_slot) { // No more slots left
       if (has_right) {
         InternalNode *left_hand_parent = internal_node_create(1);
         left_hand_parent->child[0] = (InternalNode *) left_hand_node;
-        *total_shift = shift;
+        *total_max_size = max_size;
         return (TreeNode *) left_hand_parent;
       }
       else { // if (!has_right)
@@ -1077,7 +1077,7 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
 
       if (table == NULL) {
         for (uint32_t i = 0; i < sliced_len; i++) {
-          sliced_table->size[i] = subshift * (subidx + 1 + i);
+          sliced_table->size[i] = sub_max_size * (subidx + 1 + i);
         }
       }
       else { // if (table != NULL)
@@ -1090,7 +1090,7 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
 
       sliced_root->size_table = sliced_table;
       sliced_root->child[0] = (InternalNode *) left_hand_node;
-      *total_shift = shift;
+      *total_max_size = max_size;
       return (TreeNode *) sliced_root;
     }
   }
@@ -1101,7 +1101,7 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
 
     memcpy(right_vals->child, &leaf_root->child[subidx],
            right_vals_len * sizeof(void *));
-    *total_shift = shift;
+    *total_max_size = max_size;
 
     return (TreeNode *) right_vals;
   }
