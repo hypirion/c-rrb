@@ -42,7 +42,7 @@ const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restr
     InternalNode *current = (InternalNode *) rrb->root;
     LeafNode *leaf;
     uint32_t child_index;
-    switch (rrb->shift) {"""
+    switch (RRB_MAX_SIZE(rrb)) {"""
     for n in range(max_height(rrb_bits, 32), 1, -1):
         print '    case 1 << (RRB_BITS * {}):'.format(n)
         print '      current = internal_node_clone(current);'

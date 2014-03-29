@@ -41,7 +41,7 @@ void* rrb_nth(const RRB *rrb, uint32_t index) {
   }
   else {
     const InternalNode *current = (const InternalNode *) rrb->root;
-    switch (rrb->shift) {"""
+    switch (RRB_MAX_SIZE(rrb)) {"""
     for n in range(max_height(rrb_bits, 32), 1, -1):
         print '    case 1 << (RRB_BITS * {}):'.format(n)
         print '      if (current->size_table == NULL) {'
