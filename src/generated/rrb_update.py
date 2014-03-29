@@ -42,20 +42,20 @@ const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restr
     InternalNode *current = (InternalNode *) rrb->root;
     LeafNode *leaf;
     uint32_t child_index;
-    switch (RRB_MAX_SIZE(rrb)) {"""
-    for n in range(max_height(rrb_bits, 32), 1, -1):
-        print '    case 1 << (RRB_BITS * {}):'.format(n)
+    switch (RRB_SHIFT(rrb)) {"""
+    for n in range(max_height(rrb_bits, 32) - 1 , 0, -1):
+        print '    case (RRB_BITS * {}):'.format(n)
         print '      current = internal_node_clone(current);'
         print '      *previous_pointer = current;'
         print '      if (current->size_table == NULL) {'
-        print '        child_index = (index >> (RRB_BITS * {})) & RRB_MASK;'.format(n-1)
+        print '        child_index = (index >> (RRB_BITS * {})) & RRB_MASK;'.format(n)
         print '      }'
         print '      else {'
-        print '        child_index = sized_pos(current, &index, RRB_BITS * {});'.format(n-1)
+        print '        child_index = sized_pos(current, &index, RRB_BITS * {});'.format(n)
         print '      }'
         print '      previous_pointer = &current->child[child_index];'
         print '      current = current->child[child_index];'
-    print """    case 1 << (RRB_BITS * 1):
+    print """    case 0:
       leaf = (LeafNode *) current;
       leaf = leaf_node_clone(leaf);
       *previous_pointer = (InternalNode *) leaf;

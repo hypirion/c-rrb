@@ -40,7 +40,7 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
   LeafNode *leaf;
   uint32_t index = rrb->cnt;
   uint32_t child_index;
-  switch (rrb->shift) {
+  switch (RRB_SHIFT(rrb)) {
   case 1 (RRB_BITS * N):
     current = internal_node_clone(current);
     *previous_pointer = current;

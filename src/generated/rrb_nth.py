@@ -41,16 +41,16 @@ void* rrb_nth(const RRB *rrb, uint32_t index) {
   }
   else {
     const InternalNode *current = (const InternalNode *) rrb->root;
-    switch (RRB_MAX_SIZE(rrb)) {"""
-    for n in range(max_height(rrb_bits, 32), 1, -1):
-        print '    case 1 << (RRB_BITS * {}):'.format(n)
+    switch (RRB_SHIFT(rrb)) {"""
+    for n in range(max_height(rrb_bits, 32) - 1, 0, -1):
+        print '    case (RRB_BITS * {}):'.format(n)
         print '      if (current->size_table == NULL) {'
-        print '        current = current->child[(index >> (RRB_BITS * {})) & RRB_MASK];'.format(n-1)
+        print '        current = current->child[(index >> (RRB_BITS * {})) & RRB_MASK];'.format(n)
         print '      }'
         print '      else {'
-        print '        current = sized(current, &index, RRB_BITS * {});'.format(n-1)
+        print '        current = sized(current, &index, RRB_BITS * {});'.format(n)
         print '      }'
-    print """    case 1 << (RRB_BITS * 1):
+    print """    case 0:
       return ((const LeafNode *)current)->child[index & RRB_MASK];
     default:
       return NULL;
