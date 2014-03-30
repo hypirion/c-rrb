@@ -45,15 +45,15 @@
 
 // Typical stuff
 #define RRB_MAX_SIZE(rrb) (RRB_BRANCHING << rrb->shift)
-#define INC_MAX_SIZE(ms) (ms * RRB_BRANCHING)
-#define DEC_MAX_SIZE(ms) (ms / RRB_BRANCHING)
+#define INC_MAX_SIZE(ms) (ms * (uint32_t) RRB_BRANCHING)
+#define DEC_MAX_SIZE(ms) (ms / (uint32_t) RRB_BRANCHING)
 
 #define RRB_SHIFT(rrb) (rrb->shift)
-#define INC_SHIFT(shift) (shift + RRB_BITS)
-#define DEC_SHIFT(shift) (shift - RRB_BITS)
-#define LEAF_NODE_SHIFT 0
+#define INC_SHIFT(shift) (shift + (uint32_t) RRB_BITS)
+#define DEC_SHIFT(shift) (shift - (uint32_t) RRB_BITS)
+#define LEAF_NODE_SHIFT ((uint32_t) 0)
 
-#define SHIFT_TO_MAX_SIZE(shift) (RRB_BRANCHING << shift)
+#define SHIFT_TO_MAX_SIZE(shift) (((uint32_t) RRB_BRANCHING) << shift)
 
 typedef enum {LEAF_NODE, INTERNAL_NODE} NodeType;
 
