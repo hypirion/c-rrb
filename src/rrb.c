@@ -44,16 +44,10 @@
 #endif
 
 // Typical stuff
-#define RRB_MAX_SIZE(rrb) (RRB_BRANCHING << rrb->shift)
-#define INC_MAX_SIZE(ms) (ms * (uint32_t) RRB_BRANCHING)
-#define DEC_MAX_SIZE(ms) (ms / (uint32_t) RRB_BRANCHING)
-
 #define RRB_SHIFT(rrb) (rrb->shift)
 #define INC_SHIFT(shift) (shift + (uint32_t) RRB_BITS)
 #define DEC_SHIFT(shift) (shift - (uint32_t) RRB_BITS)
 #define LEAF_NODE_SHIFT ((uint32_t) 0)
-
-#define SHIFT_TO_MAX_SIZE(shift) (((uint32_t) RRB_BRANCHING) << shift)
 
 typedef enum {LEAF_NODE, INTERNAL_NODE} NodeType;
 
@@ -595,11 +589,9 @@ static uint32_t find_shift(TreeNode *node) {
 static InternalNode* set_sizes(InternalNode *node, uint32_t shift) {
   uint32_t sum = 0;
   RRBSizeTable *table = size_table_create(node->len);
-  // TODO: Make size_sub_trie use shift? Not sure if possible or efficient.
-  const uint32_t child_max_size = DEC_MAX_SIZE(SHIFT_TO_MAX_SIZE(shift));
 
   for (uint32_t i = 0; i < node->len; i++) {
-    sum += size_sub_trie((TreeNode *) node->child[i], child_max_size);
+    sum += size_sub_trie((TreeNode *) node->child[i], shift);
     table->size[i] = sum;
   }
   node->size_table = table;
@@ -617,19 +609,19 @@ static uint32_t size_slot(TreeNode *node, uint32_t max_size) {
 }
 
 // TODO: Look into faster size calculations
-static uint32_t size_sub_trie(TreeNode *node, uint32_t max_size) {
-  if (max_size > RRB_BRANCHING) {
+static uint32_t size_sub_trie(TreeNode *node, uint32_t parent_shift) {
+  if (parent_shift > INC_SHIFT(LEAF_NODE_SHIFT)) {
     InternalNode *internal = (InternalNode *) node;
     if (internal->size_table == NULL) {
       uint32_t len = internal->len;
-      uint32_t child_max_size = DEC_MAX_SIZE(max_size);
+      uint32_t shift = DEC_SHIFT(parent_shift);
       // TODO: for loopify recursive calls
       /* We're not sure how many are in the last child, so look it up */
       uint32_t last_size =
-        size_sub_trie((TreeNode *) internal->child[len - 1], child_max_size);
+        size_sub_trie((TreeNode *) internal->child[len - 1], shift);
       /* We know all but the last ones are filled, and they have child_shift
          elements in them. */
-      return child_max_size * (len - 1) + last_size;
+      return ((len - 1) << parent_shift) + last_size;
     }
     else {
       return internal->size_table->size[internal->len - 1];
