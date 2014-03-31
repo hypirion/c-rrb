@@ -272,6 +272,7 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
     if (left_shift == LEAF_NODE_SHIFT) { // We're dealing with leaf nodes
       LeafNode *left_leaf = (LeafNode *) left_node;
       LeafNode *right_leaf = (LeafNode *) right_node;
+      // TODO: Why don't we do this if we're not at the top? Shuffling perf?
       if (is_top && (left_leaf->len + right_leaf->len) <= RRB_BRANCHING) {
         // Can put them in a single node
         LeafNode *merged = leaf_node_merge(left_leaf, right_leaf);
@@ -293,6 +294,8 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
                         (TreeNode *) right_internal->child[0],
                         DEC_SHIFT(right_shift),
                         false);
+      // can be optimised: since left_shift == right_shift, we'll end up in this
+      // block again.
       return rebalance(left_internal, centre_node, right_internal, left_shift,
                        is_top);
     }
@@ -588,29 +591,29 @@ static uint32_t find_shift(TreeNode *node) {
 static InternalNode* set_sizes(InternalNode *node, uint32_t shift) {
   uint32_t sum = 0;
   RRBSizeTable *table = size_table_create(node->len);
+  const uint32_t child_shift = DEC_SHIFT(shift);
 
   for (uint32_t i = 0; i < node->len; i++) {
-    sum += size_sub_trie((TreeNode *) node->child[i], shift);
+    sum += size_sub_trie((TreeNode *) node->child[i], child_shift);
     table->size[i] = sum;
   }
   node->size_table = table;
   return node;
 }
 
-// TODO: Look into faster size calculations
-static uint32_t size_sub_trie(TreeNode *node, uint32_t parent_shift) {
-  if (parent_shift > INC_SHIFT(LEAF_NODE_SHIFT)) {
+static uint32_t size_sub_trie(TreeNode *node, uint32_t shift) {
+  if (shift > LEAF_NODE_SHIFT) {
     InternalNode *internal = (InternalNode *) node;
     if (internal->size_table == NULL) {
       uint32_t len = internal->len;
-      uint32_t shift = DEC_SHIFT(parent_shift);
+      uint32_t child_shift = DEC_SHIFT(shift);
       // TODO: for loopify recursive calls
       /* We're not sure how many are in the last child, so look it up */
       uint32_t last_size =
-        size_sub_trie((TreeNode *) internal->child[len - 1], shift);
+        size_sub_trie((TreeNode *) internal->child[len - 1], child_shift);
       /* We know all but the last ones are filled, and they have child_shift
          elements in them. */
-      return ((len - 1) << parent_shift) + last_size;
+      return ((len - 1) << shift) + last_size;
     }
     else {
       return internal->size_table->size[internal->len - 1];
