@@ -96,8 +96,6 @@ static RRBSizeTable* shuffle(InternalNode *all, uint32_t shift, uint32_t *tlen);
 static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
                                  uint32_t slen, uint32_t shift);
 static uint32_t find_shift(TreeNode *node);
-static InternalNode* set_sizes(InternalNode *node, uint32_t max_size);
-static uint32_t size_slot(TreeNode *node, uint32_t max_size);
 static InternalNode* set_sizes(InternalNode *node, uint32_t shift);
 static uint32_t size_sub_trie(TreeNode *node, uint32_t parent_shift);
 static uint32_t sized_pos(const InternalNode *node, uint32_t *index,
@@ -427,7 +425,7 @@ static RRBSizeTable* shuffle(InternalNode *all, uint32_t shift, uint32_t *top_le
 
   uint32_t table_len = 0;
   for (uint32_t i = 0; i < all->len; i++) {
-    uint32_t size = size_slot((TreeNode *) all->child[i], DEC_SHIFT(shift));
+    uint32_t size = all->child[i]->len;
     table->size[i] = size;
     table_len += size;
   }
@@ -597,16 +595,6 @@ static InternalNode* set_sizes(InternalNode *node, uint32_t shift) {
   }
   node->size_table = table;
   return node;
-}
-
-// TODO: Optimize this away
-static uint32_t size_slot(TreeNode *node, uint32_t max_size) {
-  if (max_size > RRB_BRANCHING) { // internal node
-    return ((InternalNode *) node)->len;
-  }
-  else { // leaf node
-    return ((LeafNode *) node)->len;
-  }
 }
 
 // TODO: Look into faster size calculations
