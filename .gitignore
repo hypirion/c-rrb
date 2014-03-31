@@ -30,3 +30,4 @@
 /test-suite/Makefile
 /test-suite/Makefile.in
 /confdefs.h
+/benchmark-suite/Makefile.in
