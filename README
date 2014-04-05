@@ -7,7 +7,7 @@ To build, perform the following calls:
     ./configure
     make
 
-Copyright © 2013 Jean Niklas L'orange
+Copyright © 2013-2014 Jean Niklas L'orange
 
 Distributed under the MIT License (MIT). You can find a copy in the root of this
 project with the name COPYING.
