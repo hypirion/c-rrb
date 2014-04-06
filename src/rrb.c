@@ -932,9 +932,8 @@ static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
         idx -= table->size[subidx-1];
       }
 
-      const TreeNode *child = (TreeNode *) internal_root->child[subidx];
       const TreeNode *right_hand_node =
-        slice_right_rec(total_shift, child, idx,
+        slice_right_rec(total_shift, internal_root->child[subidx], idx,
                         subshift, (subidx != 0) | has_left);
       if (subidx == 0) {
         if (has_left) {
@@ -944,6 +943,8 @@ static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
           RRBSizeTable *right_hand_table = size_table_create(1);
 
           right_hand_table->size[0] = right + 1;
+          // TODO: Not set size_table if the underlying node doesn't have a
+          // table as well.
           right_hand_parent->size_table = right_hand_table;
           right_hand_parent->child[0] = (InternalNode *) right_hand_node;
 
@@ -988,7 +989,6 @@ const RRB* slice_left(const RRB *rrb, uint32_t left) {
   }
   else if (left > 0) {
     RRB *new_rrb = rrb_mutable_create();
-    // TODO: Directly inject shift
     TreeNode *root = slice_left_rec(&RRB_SHIFT(new_rrb), rrb->root, left,
                                     RRB_SHIFT(rrb), false);
     new_rrb->cnt = rrb->cnt - left;
@@ -1047,6 +1047,10 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
              (sliced_len - 1) * sizeof(InternalNode *));
 
       const RRBSizeTable *table = internal_root->size_table;
+
+      // TODO: Can check if left is a power of the tree size. If so, all nodes
+      // will be completely populated, and we can ignore the size table. Most
+      // importantly, this will remove the need to alloc a size table.
       RRBSizeTable *sliced_table = size_table_create(sliced_len);
 
       if (table == NULL) {
