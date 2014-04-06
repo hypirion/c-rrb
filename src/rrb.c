@@ -1051,15 +1051,18 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
 
       if (table == NULL) {
         for (uint32_t i = 0; i < sliced_len; i++) {
+          // left is total amount sliced off. By adding in subidx, we get faster
+          // computation later on.
           sliced_table->size[i] = (subidx + 1 + i) << shift;
         }
       }
       else { // if (table != NULL)
         memcpy(sliced_table->size, &table->size[subidx],
                sliced_len * sizeof(uint32_t));
-        for (uint32_t i = 0; i < sliced_len; i++) {
-          sliced_table->size[i] -= left;
-        }
+      }
+
+      for (uint32_t i = 0; i < sliced_len; i++) {
+        sliced_table->size[i] -= left;
       }
 
       sliced_root->size_table = sliced_table;
