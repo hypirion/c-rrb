@@ -213,18 +213,6 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
     return left;
   }
   else {
-    /*
-#ifdef RRB_DEBUG
-    char *str = RRB_MALLOC(sizeof(char) * 80);
-    sprintf(str, "img/rrb_concat-%03d.dot", concat_count);
-    concat_count++;
-    DotFile dot = dot_file_create(str);
-    rrb_to_dot(dot, left);
-    label_pointer(dot, left, "left");
-    rrb_to_dot(dot, right);
-    label_pointer(dot, right, "right");
-#endif
-    */
     RRB *new_rrb = rrb_mutable_create(); // ?
     InternalNode *root_candidate = concat_sub_tree(left->root, RRB_SHIFT(left),
                                                    right->root, RRB_SHIFT(right),
@@ -243,13 +231,6 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
                                              RRB_SHIFT(new_rrb));
     }
     new_rrb->cnt = left->cnt + right->cnt;
-    /*
-#ifdef RRB_DEBUG
-    rrb_to_dot(dot, new_rrb);
-    label_pointer(dot, new_rrb, "result");
-    dot_file_close(dot);
-#endif
-    */
     return new_rrb;
   }
 }
