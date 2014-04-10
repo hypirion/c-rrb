@@ -28,11 +28,13 @@
 
 #ifndef HAVE_CONFIG_H
 #warning "You don't seem to use config.h -- most efficient options are picked."
-#define DIRECT_APPEND
+#define DIRECT_APPEND 1
+#define RRB_TAIL 1
 #else
 #include <config.h>
 #endif
 
+// TODO: Define RRB_BITS in config.h
 #ifndef RRB_BITS
 #define RRB_BITS 5
 #endif
