@@ -77,11 +77,21 @@ typedef struct InternalNode {
 struct _RRB {
   uint32_t cnt;
   uint32_t shift;
+#ifdef RRB_TAIL
+  uint32_t tail_len;
+  LeafNode *tail;
+#endif
   TreeNode *root;
 };
 
 // perhaps point to an empty leaf to remove edge cases?
+#ifdef RRB_TAIL
+static const LeafNode EMPTY_LEAF = {.type = LEAF_NODE, .len = 0};
+static const RRB EMPTY_RRB = {.cnt = 0, .shift = 0, .root = NULL,
+                              .tail_len = 0, .tail = &EMPTY_LEAF};
+#else
 static const RRB EMPTY_RRB = {.cnt = 0, .shift = 0, .root = NULL};
+#endif
 
 static RRBSizeTable* size_table_create(uint32_t len);
 static RRBSizeTable* size_table_clone(const RRBSizeTable* original, uint32_t len);
