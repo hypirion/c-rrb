@@ -113,7 +113,8 @@ static uint32_t sized_pos(const InternalNode *node, uint32_t *index,
 static const InternalNode* sized(const InternalNode *node, uint32_t *index,
                                  uint32_t sp);
 
-static LeafNode* leaf_node_clone(LeafNode *original);
+static LeafNode* leaf_node_clone(const LeafNode *original);
+static LeafNode* leaf_node_inc(const LeafNode *original);
 static LeafNode* leaf_node_create(uint32_t size);
 static LeafNode* leaf_node_merge(LeafNode *left_leaf, LeafNode *right_leaf);
 
@@ -312,12 +313,21 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
   }
 }
 
-static LeafNode* leaf_node_clone(LeafNode *original) {
+static LeafNode* leaf_node_clone(const LeafNode *original) {
   size_t size = sizeof(LeafNode) + original->len * sizeof(void *);
   LeafNode *clone = RRB_MALLOC(size);
   memcpy(clone, original, size);
   return clone;
 }
+
+static LeafNode* leaf_node_inc(const LeafNode *original) {
+  size_t size = sizeof(LeafNode) + original->len * sizeof(void *);
+  LeafNode *inc = RRB_MALLOC(size + sizeof(void *));
+  memcpy(inc, original, size);
+  inc->len++;
+  return inc;
+}
+
 
 static LeafNode* leaf_node_create(uint32_t len) {
   LeafNode *node = RRB_MALLOC(sizeof(LeafNode) + len * sizeof(void *));
