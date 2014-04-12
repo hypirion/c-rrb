@@ -31,6 +31,14 @@ AC_ARG_WITH([branching],
         [RRB_BITS=$withval],
         [RRB_BITS=5])
 
+RRB_MAX_HEIGHT=1
+RRB_MAX_HEIGHT_BITS=$RRB_BITS
+[while  [ "$RRB_MAX_HEIGHT_BITS" -lt 32 ]
+do
+  RRB_MAX_HEIGHT=`expr $RRB_MAX_HEIGHT + 1`
+  RRB_MAX_HEIGHT_BITS=`expr $RRB_MAX_HEIGHT_BITS + $RRB_BITS`
+done]
+
 dnl Defines within config.h
 
 AH_TEMPLATE([DIRECT_APPEND],
@@ -66,6 +74,9 @@ if test x$rrb_debug = xtrue; then
 fi
 
 AC_SUBST([RRB_BITS])
+
+AC_DEFINE_UNQUOTED([RRB_MAX_HEIGHT], [$RRB_MAX_HEIGHT],
+                                     [The maximal height the RRB tree can have.])
 
 AC_CHECK_LIB([gc], [GC_malloc], [GCLIB=-lgc],
              AC_MSG_ERROR([Please install libgc in order to compile librrb.]))
