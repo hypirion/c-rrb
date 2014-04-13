@@ -1119,7 +1119,46 @@ const RRB* rrb_slice(const RRB *rrb, uint32_t from, uint32_t to) {
   return slice_left(slice_right(rrb, to), from);
 }
 
-#include <generated/rrb_update.c>
+const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restrict elt) {
+  if (index < rrb->cnt) {
+    RRB *new_rrb = rrb_head_clone(rrb);
+    InternalNode **previous_pointer = (InternalNode **) &new_rrb->root;
+    InternalNode *current = (InternalNode *) rrb->root;
+    LeafNode *leaf;
+    uint32_t child_index;
+    switch (RRB_SHIFT(rrb)) {
+#define DECREMENT RRB_MAX_HEIGHT
+#include "decrement.h"
+#define WANTED_ITERATIONS DECREMENT
+#define REVERSE_I(i) (RRB_MAX_HEIGHT - i - 1)
+#define LOOP_BODY(i) case (RRB_BITS * REVERSE_I(i)):  \
+      current = internal_node_clone(current); \
+      *previous_pointer = current; \
+      if (current->size_table == NULL) { \
+        child_index = (index >> (RRB_BITS * REVERSE_I(i))) & RRB_MASK; \
+      } \
+      else { \
+        child_index = sized_pos(current, &index, RRB_BITS * REVERSE_I(i)); \
+      } \
+      previous_pointer = &current->child[child_index]; \
+      current = current->child[child_index];
+#include "unroll.h"
+#undef DECREMENT
+#undef REVERSE_I
+    case 0:
+      leaf = (LeafNode *) current;
+      leaf = leaf_node_clone(leaf);
+      *previous_pointer = (InternalNode *) leaf;
+      leaf->child[index & RRB_MASK] = elt;
+      return new_rrb;
+    default:
+      return NULL;
+    }
+  }
+  else {
+    return NULL;
+  }
+}
 
 /******************************************************************************/
 /*                    DEBUGGING AND VISUALIZATION METHODS                     */
