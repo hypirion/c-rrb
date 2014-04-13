@@ -864,7 +864,34 @@ static const InternalNode* sized(const InternalNode *node, uint32_t *index,
   return (InternalNode *) node->child[is];
 }
 
-#include <generated/rrb_nth.c>
+void* rrb_nth(const RRB *rrb, uint32_t index) {
+  if (index >= rrb->cnt) {
+    return NULL;
+  }
+  else {
+    const InternalNode *current = (const InternalNode *) rrb->root;
+    switch (RRB_SHIFT(rrb)) {
+#define DECREMENT RRB_MAX_HEIGHT
+#include "decrement.h"
+#define WANTED_ITERATIONS DECREMENT
+#define REVERSE_I(i) (RRB_MAX_HEIGHT - i - 1)
+#define LOOP_BODY(i) case (RRB_BITS * REVERSE_I(i)):  \
+      if (current->size_table == NULL) { \
+        current = current->child[(index >> (RRB_BITS * REVERSE_I(i))) & RRB_MASK]; \
+      } \
+      else { \
+        current = sized(current, &index, RRB_BITS * REVERSE_I(i)); \
+      }
+#include "unroll.h"
+#undef DECREMENT
+#undef REVERSE_I
+    case 0:
+      return ((const LeafNode *)current)->child[index & RRB_MASK];
+    default:
+      return NULL;
+    }
+  }
+}
 
 uint32_t rrb_count(const RRB *rrb) {
   return rrb->cnt;
