@@ -1196,6 +1196,15 @@ const RRB* rrb_slice(const RRB *rrb, uint32_t from, uint32_t to) {
 const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restrict elt) {
   if (index < rrb->cnt) {
     RRB *new_rrb = rrb_head_clone(rrb);
+#ifdef RRB_TAIL
+    const uint32_t tail_offset = rrb->cnt - rrb->tail_len;
+    if (tail_offset <= index) {
+      LeafNode *new_tail = leaf_node_clone(rrb->tail);
+      new_tail->child[index - tail_offset] = elt;
+      new_rrb->tail = new_tail;
+      return new_rrb;
+    }
+#endif
     InternalNode **previous_pointer = (InternalNode **) &new_rrb->root;
     InternalNode *current = (InternalNode *) rrb->root;
     LeafNode *leaf;
