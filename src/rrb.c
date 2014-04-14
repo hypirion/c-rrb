@@ -869,6 +869,12 @@ void* rrb_nth(const RRB *rrb, uint32_t index) {
   if (index >= rrb->cnt) {
     return NULL;
   }
+#ifdef RRB_TAIL
+  const uint32_t tail_offset = rrb->cnt - rrb->tail_len;
+  if (tail_offset <= index) {
+    return rrb->tail->child[index - tail_offset];
+  }
+#endif
   else {
     const InternalNode *current = (const InternalNode *) rrb->root;
     switch (RRB_SHIFT(rrb)) {
