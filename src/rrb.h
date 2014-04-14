@@ -34,9 +34,9 @@
 #include <config.h>
 #endif
 
-// TODO: Define RRB_BITS in config.h
 #ifndef RRB_BITS
 #define RRB_BITS 5
+#define RRB_MAX_HEIGHT 7
 #endif
 #define RRB_BRANCHING (1 << RRB_BITS)
 #define RRB_MASK (RRB_BRANCHING - 1)
