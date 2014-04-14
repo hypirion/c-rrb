@@ -40,9 +40,9 @@ AC_ARG_WITH([branching],
         [RRB_BITS=$withval],
         [RRB_BITS=5])
 
-RRB_MAX_HEIGHT=1
+[RRB_MAX_HEIGHT=1
 RRB_MAX_HEIGHT_BITS=$RRB_BITS
-[while  [ "$RRB_MAX_HEIGHT_BITS" -lt 32 ]
+while  [ "$RRB_MAX_HEIGHT_BITS" -lt 32 ]
 do
   RRB_MAX_HEIGHT=`expr $RRB_MAX_HEIGHT + 1`
   RRB_MAX_HEIGHT_BITS=`expr $RRB_MAX_HEIGHT_BITS + $RRB_BITS`
@@ -111,6 +111,9 @@ if test x$rrb_tail = xtrue; then
    AC_DEFINE([RRB_TAIL])
 fi
 
+
+AC_DEFINE_UNQUOTED([RRB_BITS], [$RRB_BITS],
+                               [The amount of bits used for a single node.])
 AC_DEFINE_UNQUOTED([RRB_MAX_HEIGHT], [$RRB_MAX_HEIGHT],
                                      [The maximal height the RRB tree can have.])
 
