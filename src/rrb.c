@@ -1319,11 +1319,32 @@ void rrb_to_dot(DotFile dot, const RRB *rrb) {
             "    <td height=\"36\" width=\"25\">%d</td>\n"
             "    <td height=\"36\" width=\"25\">%d</td>\n"
             "    <td height=\"36\" width=\"25\" port=\"root\"></td>\n"
+#ifdef RRB_TAIL
+            "    <td height=\"36\" width=\"25\">%d</td>\n"
+            "    <td height=\"36\" width=\"25\" port=\"tail\"></td>\n"
+#endif
             "  </tr>\n"
             "</table>>];\n",
-            rrb, rrb->cnt, rrb->shift);
-    fprintf(dot.file, "  s%p:root -> s%p:body;\n", rrb, rrb->root);
-    tree_node_to_dot(dot, rrb->root, true);
+            rrb, rrb->cnt, rrb->shift, IF_TAIL(rrb->tail_len, 0));
+#ifdef RRB_TAIL
+    if (rrb->tail == NULL) {
+      fprintf(dot.file, "  s%d [label=\"NIL\"];\n", null_counter);
+      fprintf(dot.file, "  s%p:tail -> s%d;\n", rrb, null_counter++);
+    }
+    else {
+      fprintf(dot.file, "  s%p:tail -> s%p:body;\n", rrb, rrb->tail);
+      // Consider doing the rank=same thing.
+      leaf_node_to_dot(dot, rrb->tail);
+    }
+#endif
+    if (rrb->root == NULL) {
+      fprintf(dot.file, "  s%d [label=\"NIL\"];\n", null_counter);
+      fprintf(dot.file, "  s%p:root -> s%d;\n", rrb, null_counter++);
+    }
+    else {
+      fprintf(dot.file, "  s%p:root -> s%p:body;\n", rrb, rrb->root);
+      tree_node_to_dot(dot, rrb->root, true);
+    }
   }
 }
 
