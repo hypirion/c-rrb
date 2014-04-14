@@ -626,17 +626,56 @@ static uint32_t size_sub_trie(TreeNode *node, uint32_t shift) {
   }
 }
 
+#ifdef RRB_TAIL
+#define IF_TAIL(a, b) a
+static inline RRB* rrb_tail_push(const RRB *restrict rrb, const void *restrict elt);
+
+static inline RRB* rrb_tail_push(const RRB *restrict rrb, const void *restrict elt) {
+  RRB* new_rrb = rrb_head_clone(rrb);
+  LeafNode *new_tail = leaf_node_inc(rrb->tail);
+  new_tail->child[new_rrb->tail_len] = elt;
+  new_rrb->cnt++;
+  new_rrb->tail_len++;
+  new_rrb->tail = new_tail;
+  return new_rrb;
+}
+
+#define TAIL_OPTIMISATION(rrb, elt) if (rrb->tail_len < RRB_BRANCHING) {  \
+  return rrb_tail_push(rrb, elt); \
+  }
+
+#else
+
+#define TAIL_OPTIMISATION(rrb, elt) /* We explicitly do NOT use a tail. */
+#define IF_TAIL(a, b) b
+
+#endif
+
 #ifdef DIRECT_APPEND
 
 static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k);
-static void** append_empty(InternalNode **to_set, uint32_t pos, uint32_t empty_height);
+static IF_TAIL(InternalNode**, void**)
+  append_empty(InternalNode **to_set, uint32_t pos, uint32_t empty_height);
 
 const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
+  TAIL_OPTIMISATION(rrb, elt);
   RRB *new_rrb = rrb_head_clone(rrb);
   new_rrb->cnt++;
 
-  // small check if the rrb is empty. Should be somehow be incorporated into
-  // the algorithm instead of being an extreme edge case.
+#ifdef RRB_TAIL
+  LeafNode *new_tail = leaf_node_create(1);
+  new_tail->child[0] = elt;
+  new_rrb->tail_len = 1;
+  new_rrb->tail = new_tail;
+  const LeafNode *old_tail = rrb->tail;
+  if (rrb->cnt == RRB_BRANCHING) {
+    new_rrb->shift = LEAF_NODE_SHIFT;
+    new_rrb->root = (TreeNode *) old_tail;
+    return new_rrb;
+  }
+#else
+  // small check if the rrb is empty. Should preferably be incorporated into the
+  // algorithm instead of being an extreme edge case.
   if (rrb->cnt == 0) {
     LeafNode *leaf = leaf_node_create(1);
     leaf->child[0] = elt;
@@ -644,11 +683,13 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
     new_rrb->root = (TreeNode *) leaf;
     return new_rrb;
   }
+#endif
   // Copyable count starts here
 
   // TODO: Can find last rightmost jump in constant time for pvec subvecs:
   // use the fact that (index & large_mask) == 1 << (RRB_BITS * H) - 1 -> 0 etc.
-  uint32_t index = rrb->cnt;
+
+  uint32_t index = rrb->cnt - IF_TAIL(1, 0);
 
   uint32_t nodes_to_copy = 0;
   uint32_t nodes_visited = 0;
@@ -658,8 +699,8 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
 
   uint32_t shift = RRB_SHIFT(rrb);
 
-  // checking all non-leaf nodes
-  while (shift != 0) {
+  // checking all non-leaf nodes (or if tail, all but the lowest two levels)
+  while (shift > IF_TAIL(INC_SHIFT(LEAF_NODE_SHIFT), 0)) {
     // calculate child index
     uint32_t child_index;
     if (current->size_table == NULL) {
@@ -669,7 +710,7 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
       // false.
       const uint32_t prev_shift = shift + RRB_BITS;
       if (index >> prev_shift > 0) {
-        nodes_visited++; // this could possibly be done earlier in teh code.
+        nodes_visited++; // this could possibly be done earlier in the code.
         goto copyable_count_end;
       }
       child_index = (index >> shift) & RRB_MASK;
@@ -703,21 +744,27 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
     }
     shift -= RRB_BITS;
   }
-  // if we're here, we're at the leaf element, which is `current`
-  {
-    // no need to even use index here: We know it'll be placed at current->len,
-    // if there's enough space. That check is easy.
+  // if we're here, we're at the leaf node (or lowest non-leaf), which is
+  // `current`
+
+  // no need to even use index here: We know it'll be placed at current->len,
+  // if there's enough space. That check is easy.
+#ifdef RRB_TAIL
+  if (shift != 0) {
+#endif
     nodes_visited++;
     if (current->len < RRB_BRANCHING) {
       nodes_to_copy = nodes_visited;
       pos = current->len;
     }
+#ifdef RRB_TAIL
   }
+#endif
 
  copyable_count_end:
   // GURRHH, nodes_visited is not yet handled nicely. for loop down to get
   // nodes_visited set straight.
-  while (shift > 0) {
+  while (shift > IF_TAIL(INC_SHIFT(LEAF_NODE_SHIFT), 0)) {
     nodes_visited++;
     shift -= RRB_BITS;
   }
@@ -739,15 +786,25 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
     }
 
     // nodes visited == original rrb tree height. Nodes visited > 0.
-
+#ifdef RRB_TAIL
+    InternalNode **to_set = append_empty(&((InternalNode *) new_rrb->root)->child[1], 1,
+                                         nodes_visited);
+    *to_set = (InternalNode *) old_tail;
+#else
     void **to_set = append_empty(&((InternalNode *) new_rrb->root)->child[1], 1,
                                  nodes_visited);
     *to_set = (void *) elt;
+#endif
   }
   else {
     InternalNode **node = copy_first_k(rrb, new_rrb, nodes_to_copy);
+#ifdef RRB_TAIL
+    InternalNode **to_set = append_empty(node, pos, nodes_visited - nodes_to_copy);
+    *to_set = (InternalNode *) old_tail;
+#else
     void **to_set = append_empty(node, pos, nodes_visited - nodes_to_copy);
     *to_set = (void *) elt;
+#endif
   }
 
   return new_rrb;
@@ -761,18 +818,15 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
  * - append_empty now returns a pointer to the *void we're supposed to set
  **/
 
-InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k) {
+static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k) {
   const InternalNode *current = (const InternalNode *) rrb->root;
   InternalNode **to_set = (InternalNode **) &new_rrb->root;
-  uint32_t index = rrb->cnt;
-
-  // TODO: again, need to change rrb->shift to actual shift -- otherwise this
-  // will be very very slow
+  uint32_t index = rrb->cnt - IF_TAIL(1, 0);
   uint32_t shift = RRB_SHIFT(rrb);
 
   // Copy all non-leaf nodes first. Happens when shift > RRB_BRANCHING
   uint32_t i = 1;
-  while (i <= k && shift != 0) {
+  while (i <= k IF_TAIL(,&& shift != 0)) {
     // First off, copy current node and stick it in.
     InternalNode *new_current;
     if (i != k) {
@@ -807,6 +861,7 @@ InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k) {
     shift -= RRB_BITS;
   }
 
+#ifndef RRB_TAIL
   // check if we need to copy any leaf nodes. This is actually very likely to
   // happen (31/32 amortized)
   if (i == k) {
@@ -816,12 +871,18 @@ InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k) {
            current->len * sizeof(void *));
     *to_set = (InternalNode *) leaf;
   }
+#endif
   return to_set;
 }
 
-void** append_empty(InternalNode **to_set, uint32_t pos, uint32_t empty_height) {
+static IF_TAIL(InternalNode**, void**)
+  append_empty(InternalNode **to_set, uint32_t pos, uint32_t empty_height) {
   if (0 < empty_height) {
+#ifdef RRB_TAIL
+    InternalNode *leaf = internal_node_create(1);
+#else
     LeafNode *leaf = leaf_node_create(1);
+#endif
     InternalNode *empty = (InternalNode *) leaf;
     for (uint32_t i = 1; i < empty_height; i++) {
       InternalNode *new_empty = internal_node_create(1);
@@ -832,13 +893,19 @@ void** append_empty(InternalNode **to_set, uint32_t pos, uint32_t empty_height) 
     *to_set = empty;
     return &leaf->child[0];
   }
+#ifdef RRB_TAIL
+  else {
+    return to_set;
+  }
+#else
   else {
     return &((*((LeafNode **)to_set))->child[pos]);
   }
+#endif
 }
-
 #else
 const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
+  TAIL_OPTIMISATION(rrb, elt);
   LeafNode *right_root = leaf_node_create(1);
   right_root->child[0] = elt;
   const RRB* right = rrb_head_create((TreeNode *) right_root, 1, 0);
