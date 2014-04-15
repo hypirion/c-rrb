@@ -1182,11 +1182,37 @@ const RRB* slice_left(const RRB *rrb, uint32_t left) {
     return rrb_create();
   }
   else if (left > 0) {
+    const uint32_t remaining = rrb->cnt - left;
+#ifdef RRB_TAIL
+    // If we slice into the tail, we just need to modify the tail itself
+    if (remaining <= rrb->tail_len) {
+      LeafNode *new_tail = leaf_node_create(remaining);
+      memcpy(new_tail->child, &rrb->tail->child[rrb->tail_len - remaining],
+             remaining * sizeof(void *));
+
+      RRB *new_rrb = rrb_mutable_create();
+      new_rrb->cnt = remaining;
+      new_rrb->tail_len = remaining;
+      new_rrb->tail = new_tail;
+      return new_rrb;
+    }
+    // Otherwise, we don't really have to take the tail into consideration.
+    // Good!
+
+    // TODO: We can in theory compress the slicing. Say we have one element left
+    // in the tree, and the tail has space for it. So if there's space for the
+    // remaining elements to reside within the tail, we can just transfer them
+    // there.
+#endif
     RRB *new_rrb = rrb_mutable_create();
     TreeNode *root = slice_left_rec(&RRB_SHIFT(new_rrb), rrb->root, left,
                                     RRB_SHIFT(rrb), false);
-    new_rrb->cnt = rrb->cnt - left;
+    new_rrb->cnt = remaining;
     new_rrb->root = root;
+#ifdef RRB_TAIL
+    new_rrb->tail = rrb->tail;
+    new_rrb->tail_len = rrb->tail_len;
+#endif
     return new_rrb;
   }
   else { // if (left == 0)
