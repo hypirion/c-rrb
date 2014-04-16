@@ -142,7 +142,14 @@ static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift);
 static RRB* rrb_head_clone(const RRB *original);
 
 #ifdef RRB_TAIL
+static RRB* push_down_tail(const RRB *restrict rrb, RRB *restrict new_rrb,
+                           const LeafNode *restrict new_tail);
 static void promote_rightmost_leaf(RRB *new_rrb);
+
+#define IF_TAIL(a, b) a
+
+#else
+#define IF_TAIL(a, b) b
 #endif
 
 #ifdef RRB_DEBUG
@@ -218,11 +225,56 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
     return left;
   }
   else {
-    RRB *new_rrb = rrb_mutable_create(); // ?
+#ifdef RRB_TAIL
+    if (right->root == NULL) {
+      // merge left and right tail, if possible
+      RRB *new_rrb = rrb_head_clone(left);
+      new_rrb->cnt += right->cnt;
+
+      // skip merging if left tail is full.
+      if (left->tail_len == RRB_BRANCHING) {
+        new_rrb->tail_len = right->tail_len;
+        return push_down_tail(left, new_rrb, right->tail);
+      }
+      // We can merge both tails into a single tail.
+      else if (left->tail_len + right->tail_len <= RRB_BRANCHING) {
+        const uint32_t new_tail_len = left->tail_len + right->tail_len;
+        LeafNode *new_tail = leaf_node_merge(left->tail, right->tail);
+        new_rrb->tail = new_tail;
+        new_rrb->tail_len = new_tail_len;
+        return new_rrb;
+      }
+      else { // must push down something, and will have elements remaining in
+             // the right tail
+        LeafNode *push_down = leaf_node_create(RRB_BRANCHING);
+        memcpy(&push_down->child[0], &left->tail->child[0],
+               left->tail_len * sizeof(void *));
+        const uint32_t right_cut = RRB_BRANCHING - left->tail_len;
+        memcpy(&push_down->child[left->tail_len], &right->tail->child[0],
+               right_cut * sizeof(void *));
+
+        // this will be strictly positive.
+        const uint32_t new_tail_len = right->tail_len - right_cut;
+        LeafNode *new_tail = leaf_node_create(new_tail_len);
+
+        memcpy(&new_tail->child[0], &right->tail->child[right_cut],
+               new_tail_len * sizeof(void *));
+
+        new_rrb->tail = push_down;
+        new_rrb->tail_len = new_tail_len;
+        return push_down_tail(left, new_rrb, new_tail);
+      }
+    }
+    left = push_down_tail(left, rrb_head_clone(left), NULL);
+#endif
+    RRB *new_rrb = rrb_mutable_create();
+    new_rrb->cnt = left->cnt + right->cnt;
+
     InternalNode *root_candidate = concat_sub_tree(left->root, RRB_SHIFT(left),
                                                    right->root, RRB_SHIFT(right),
                                                    true);
 
+#ifndef RRB_TAIL
     // Is there enough space in a leaf node? If so, pick that leaf node as root.
     if ((RRB_SHIFT(left) == LEAF_NODE_SHIFT) && (RRB_SHIFT(right) == LEAF_NODE_SHIFT)
         && ((left->cnt + right->cnt) <= RRB_BRANCHING)) {
@@ -230,12 +282,17 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
       new_rrb->shift = find_shift(new_rrb->root);
     }
     else {
+#endif
       new_rrb->shift = find_shift((TreeNode *) root_candidate);
       // must be done before we set sizes.
       new_rrb->root = (TreeNode *) set_sizes(root_candidate,
                                              RRB_SHIFT(new_rrb));
+#ifndef RRB_TAIL
     }
-    new_rrb->cnt = left->cnt + right->cnt;
+#else
+    new_rrb->tail = right->tail;
+    new_rrb->tail_len = right->tail_len;
+#endif
     return new_rrb;
   }
 }
@@ -645,7 +702,6 @@ static uint32_t size_sub_trie(TreeNode *node, uint32_t shift) {
 }
 
 #ifdef RRB_TAIL
-#define IF_TAIL(a, b) a
 static inline RRB* rrb_tail_push(const RRB *restrict rrb, const void *restrict elt);
 
 static inline RRB* rrb_tail_push(const RRB *restrict rrb, const void *restrict elt) {
@@ -663,10 +719,7 @@ static inline RRB* rrb_tail_push(const RRB *restrict rrb, const void *restrict e
   }
 
 #else
-
 #define TAIL_OPTIMISATION(rrb, elt) /* We explicitly do NOT use a tail. */
-#define IF_TAIL(a, b) b
-
 #endif
 
 #ifdef DIRECT_APPEND
@@ -684,9 +737,16 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
   LeafNode *new_tail = leaf_node_create(1);
   new_tail->child[0] = elt;
   new_rrb->tail_len = 1;
+  return push_down_tail(rrb, new_rrb, new_tail);
+}
+
+// Yes, this is turning into an amazing spaghetti.
+
+static RRB* push_down_tail(const RRB *restrict rrb, RRB *restrict new_rrb,
+                           const LeafNode *restrict new_tail) {
+  const LeafNode *old_tail = new_rrb->tail;
   new_rrb->tail = new_tail;
-  const LeafNode *old_tail = rrb->tail;
-  if (rrb->cnt == RRB_BRANCHING) {
+  if (rrb->cnt <= RRB_BRANCHING) {
     new_rrb->shift = LEAF_NODE_SHIFT;
     new_rrb->root = (TreeNode *) old_tail;
     return new_rrb;
