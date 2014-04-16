@@ -7,16 +7,22 @@ AC_PROG_CC([clang gcc cc])
 AM_PROG_AR
 LT_INIT
 
+dnl ----------------------------------------------------------------------------
 dnl Find the build directory and the source directory
+
 top_builddir_absolute=`pwd`
 AC_SUBST(top_builddir_absolute)
 top_srcdir_absolute=`(cd $srcdir && pwd)`
 AC_SUBST(top_srcdir_absolute)
 
+dnl ----------------------------------------------------------------------------
 dnl Config scripts
+
 AC_DEFUN([RRB_CONFIG_SCRIPT],[AC_CONFIG_FILES([$1],[chmod +x $1])])
 
+dnl ----------------------------------------------------------------------------
 dnl Setup debug variables for c
+
 case $CC in
    *clang*) DEBUG_VARS='-Weverything -Wno-cast-align' ;;
    *gcc*)   DEBUG_VARS='-Wall' ;;
@@ -26,20 +32,23 @@ AC_SUBST([DEBUG_VARS])
 
 AC_PROG_CC_STDC
 
+dnl ----------------------------------------------------------------------------
+dnl Defines within config.h
+
 AC_ARG_WITH([branching],
         [AS_HELP_STRING([--with-branching=bits : number of bits per branching])],
         [RRB_BITS=$withval],
         [RRB_BITS=5])
 
-RRB_MAX_HEIGHT=1
+[RRB_MAX_HEIGHT=1
 RRB_MAX_HEIGHT_BITS=$RRB_BITS
-[while  [ "$RRB_MAX_HEIGHT_BITS" -lt 32 ]
+while  [ "$RRB_MAX_HEIGHT_BITS" -lt 32 ]
 do
   RRB_MAX_HEIGHT=`expr $RRB_MAX_HEIGHT + 1`
   RRB_MAX_HEIGHT_BITS=`expr $RRB_MAX_HEIGHT_BITS + $RRB_BITS`
 done]
 
-dnl Defines within config.h
+dnl Direct append
 
 AH_TEMPLATE([DIRECT_APPEND],
         [Perform RRB-appending without doing any type of rebalancing.])
@@ -58,6 +67,8 @@ if test x$direct_append = xtrue; then
    AC_DEFINE([DIRECT_APPEND])
 fi
 
+dnl Debugging functions
+
 AH_TEMPLATE([RRB_DEBUG],
         [Enable RRB-tree debugging functions.])
 
@@ -73,16 +84,49 @@ if test x$rrb_debug = xtrue; then
    AC_DEFINE([RRB_DEBUG])
 fi
 
+dnl Number of bits in the rrb tree
+dnl Used inside makefile.ac, not inserted inside config.h
+
+AC_ARG_WITH([branching],
+        [AS_HELP_STRING([--with-branching=bits : number of bits per branching])],
+        [RRB_BITS=$withval],
+        [RRB_BITS=5])
+
 AC_SUBST([RRB_BITS])
 
+dnl Whether or not to include an RRB tail
+
+AH_TEMPLATE([RRB_TAIL],
+        [If set, asserts that the RRB-tree should use a tail.])
+
+AC_ARG_ENABLE([tail],
+[  --enable-tail    Enable rrb-tree tail usage.],
+[case "${enableval}" in
+  yes) rrb_tail=true ;;
+  no)  rrb_tail=false ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --enable-tail]) ;;
+esac],[rrb_tail=true])
+
+if test x$rrb_tail = xtrue; then
+   AC_DEFINE([RRB_TAIL])
+fi
+
+
+AC_DEFINE_UNQUOTED([RRB_BITS], [$RRB_BITS],
+                               [The amount of bits used for a single node.])
 AC_DEFINE_UNQUOTED([RRB_MAX_HEIGHT], [$RRB_MAX_HEIGHT],
                                      [The maximal height the RRB tree can have.])
+
+dnl ----------------------------------------------------------------------------
+dnl Check that libraries exist
 
 AC_CHECK_LIB([gc], [GC_malloc], [GCLIB=-lgc],
              AC_MSG_ERROR([Please install libgc in order to compile librrb.]))
 AC_SUBST([GCLIB])
 
+dnl ----------------------------------------------------------------------------
 dnl Check for header files here.
+
 AC_CHECK_HEADERS([stdio.h])
 AC_CHECK_HEADERS([stdint.h])
 AC_CHECK_HEADERS([stdlib.h])
