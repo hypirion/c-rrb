@@ -27,10 +27,13 @@
 #include "rrb.h"
 #include "test.h"
 
-#define RRB_COUNT 1000
-#define PREDEF_RRBS 10
-#define MAX_INIT_SIZE RRB_BRANCHING
-#define TOT_CATTED 10
+#ifndef MIN
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#endif
+
+#define RRB_COUNT 2600
+#define PREDEF_RRBS 200
+#define MAX_INIT_SIZE (MIN(RRB_BRANCHING,16))
 
 static const RRB* rand_rrb() {
   const uint32_t size = (uint32_t) (rand() % MAX_INIT_SIZE);
@@ -41,9 +44,9 @@ static const RRB* rand_rrb() {
   return rrb;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
   GC_INIT();
-  randomize_rand();
+  setup_rand(argc == 2 ? argv[1] : NULL);
 
   int fail = 0;
 

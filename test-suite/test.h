@@ -28,10 +28,21 @@
 
 void randomize_rand(void);
 void print_rrb(const RRB *rrb);
+void setup_rand(const char *str_seed);
+
+void setup_rand(const char *str_seed) {
+  if (str_seed == NULL) {
+    randomize_rand();
+  } else {
+    unsigned int seed = (unsigned int) atol(str_seed);
+    printf("Seed for this run: %u\n", seed);
+    srand(seed);
+  }
+}
 
 void randomize_rand() {
   time_t timestamp = time(NULL);
-  printf("Timestamp for this run: %u\n", (unsigned int) timestamp);
+  printf("Seed for this run: %u\n", (unsigned int) timestamp);
   srand((unsigned int) timestamp);
 }
 
