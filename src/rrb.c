@@ -178,8 +178,6 @@ static void internal_node_to_dot(DotFile dot, const InternalNode *root, char pri
 static void size_table_to_dot(DotFile dot, const InternalNode *node);
 
 static uint32_t node_size(DotArray *arr, const TreeNode *node);
-
-static int concat_count = 0;
 #endif
 
 static RRBSizeTable* size_table_create(uint32_t size) {
@@ -522,13 +520,13 @@ static RRBSizeTable* shuffle(InternalNode *all, uint32_t shift, uint32_t *top_le
   }
 
   const uint32_t effective_slot = (table_len / RRB_BRANCHING) + 1;
-  const uint32_t min_width = RRB_BRANCHING - RRB_INVARIANT; // Hello #define?
 
   uint32_t new_len = all->len;
   while (new_len > effective_slot + RRB_EXTRAS) {
 
     uint32_t i = 0;
-    while (table->size[i] > min_width) {
+    while (table->size[i] > RRB_BRANCHING - RRB_INVARIANT) {
+      // TODO: Could this segfault? if all sizes > RRB_BRANCHING - RRB_INVARIANT?
       i++;
     }
     // Found short node, so redistribute over the following nodes
