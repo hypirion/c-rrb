@@ -1526,13 +1526,12 @@ void rrb_to_dot(DotFile dot, const RRB *rrb) {
     }
 #endif
     if (rrb->root == NULL) {
-      fprintf(dot.file, "  s%d [label=\"NIL\"];\n", null_counter);
-      fprintf(dot.file, "  s%p:root -> s%d;\n", rrb, null_counter++);
+      fprintf(dot.file, "  s%p:root -> s%d;\n", rrb, null_counter);
     }
     else {
       fprintf(dot.file, "  s%p:root -> s%p:body;\n", rrb, rrb->root);
-      tree_node_to_dot(dot, rrb->root, true);
     }
+    tree_node_to_dot(dot, rrb->root, true);
   }
 }
 
@@ -1592,7 +1591,12 @@ static void internal_node_to_dot(DotFile dot, const InternalNode *root,
     }
 
     for (uint32_t i = 0; i < root->len; i++) {
-      fprintf(dot.file, "  s%p:%d -> s%p:body;\n", root, i, root->child[i]);
+      if (root->child[i] == NULL) {
+        fprintf(dot.file, "  s%p:%d -> s%d;\n", root, i, null_counter);
+      }
+      else {
+        fprintf(dot.file, "  s%p:%d -> s%p:body;\n", root, i, root->child[i]);
+      }
       tree_node_to_dot(dot, (TreeNode *) root->child[i], print_table);
     }
   }
