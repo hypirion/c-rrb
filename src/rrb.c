@@ -154,6 +154,7 @@ static void promote_rightmost_leaf(RRB *new_rrb);
 
 #ifdef RRB_DEBUG
 #include <stdio.h>
+#include <stdarg.h>
 
 typedef struct _DotArray {
   uint32_t len;
@@ -1667,6 +1668,19 @@ static uint32_t node_size(DotArray *set, const TreeNode *root) {
     return node_bytes;
   }
   }
+}
+
+// Need to use GDB for using this. LLDB Cannot handle vararg correctly.
+void nodes_to_dot_file(char *loch, int ncount, ...) {
+  va_list nodes;
+  DotFile dot = dot_file_create(loch);
+
+  va_start(nodes, ncount);
+  for (int i = 0; i < ncount; i++) {
+    tree_node_to_dot(dot, va_arg(nodes, TreeNode*), true);
+  }
+  va_end(nodes);
+  dot_file_close(dot);
 }
 
 uint32_t rrb_memory_usage(const RRB *const *rrbs, uint32_t rrb_count) {
