@@ -27,3 +27,7 @@ test_slice_SOURCES = test_slice.c test.h
 check_PROGRAMS += test_catslice
 TESTS += test_catslice
 test_catslice_SOURCES = test_catslice.c test.h
+
+check_PROGRAMS += test_fibocat
+TESTS += test_fibocat
+test_fibocat_SOURCES = test_fibocat.c test.h

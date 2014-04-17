@@ -95,6 +95,7 @@ static const RRB EMPTY_RRB = {.cnt = 0, .shift = 0, .root = NULL};
 
 static RRBSizeTable* size_table_create(uint32_t len);
 static RRBSizeTable* size_table_clone(const RRBSizeTable* original, uint32_t len);
+static RRBSizeTable* size_table_inc(const RRBSizeTable *original, uint32_t len);
 
 static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
                                      TreeNode *right_node, uint32_t right_shift,
@@ -154,6 +155,7 @@ static void promote_rightmost_leaf(RRB *new_rrb);
 
 #ifdef RRB_DEBUG
 #include <stdio.h>
+#include <stdarg.h>
 
 typedef struct _DotArray {
   uint32_t len;
@@ -192,6 +194,14 @@ static RRBSizeTable* size_table_clone(const RRBSizeTable *original,
                                    + len * sizeof(uint32_t));
   memcpy(&clone->size, &original->size, sizeof(uint32_t) * len);
   return clone;
+}
+
+static inline RRBSizeTable* size_table_inc(const RRBSizeTable *original,
+                                           uint32_t len) {
+  RRBSizeTable *incr = RRB_MALLOC(sizeof(RRBSizeTable) +
+                                  (len + 1) * sizeof(uint32_t));
+  memcpy(&incr->size, &original->size, sizeof(uint32_t) * len);
+  return incr;
 }
 
 static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift) {
@@ -448,14 +458,16 @@ static InternalNode* internal_node_copy(InternalNode *original, uint32_t start,
   return copy;
 }
 
-// GURR HURR THIS LEAKS SIZE TABLE
 static InternalNode* internal_node_inc(const InternalNode *original) {
   size_t size = sizeof(InternalNode) + original->len * sizeof(InternalNode *);
-  InternalNode *clone = RRB_MALLOC(size + sizeof(InternalNode *));
-  memcpy(clone, original, size);
+  InternalNode *incr = RRB_MALLOC(size + sizeof(InternalNode *));
+  memcpy(incr, original, size);
   // update length
-  clone->len++;
-  return clone;
+  if (incr->size_table != NULL) {
+    incr->size_table = size_table_inc(incr->size_table, incr->len);
+  }
+  incr->len++;
+  return incr;
 }
 
 static InternalNode* internal_node_dec(const InternalNode *original) {
@@ -623,7 +635,7 @@ static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
           const InternalNode *aaa = all->child[new_idx];
 
           if (fill_count == 0) {
-            aa = internal_node_create(new_size); // may leak here.
+            aa = internal_node_create(new_size);
           }
 
           if (new_size - fill_count > aaa->len - offs) {
@@ -723,8 +735,13 @@ static inline RRB* rrb_tail_push(const RRB *restrict rrb, const void *restrict e
 #endif
 
 #ifdef DIRECT_APPEND
-
+#ifdef RRB_TAIL
+static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k,
+                                   const uint32_t tail_size);
+#else
 static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k);
+#endif
+
 static IF_TAIL(InternalNode**, void**)
   append_empty(InternalNode **to_set, uint32_t pos, uint32_t empty_height);
 
@@ -875,11 +892,12 @@ static RRB* push_down_tail(const RRB *restrict rrb, RRB *restrict new_rrb,
 #endif
   }
   else {
-    InternalNode **node = copy_first_k(rrb, new_rrb, nodes_to_copy);
 #ifdef RRB_TAIL
+    InternalNode **node = copy_first_k(rrb, new_rrb, nodes_to_copy, old_tail->len);
     InternalNode **to_set = append_empty(node, pos, nodes_visited - nodes_to_copy);
     *to_set = (InternalNode *) old_tail;
 #else
+    InternalNode **node = copy_first_k(rrb, new_rrb, nodes_to_copy);
     void **to_set = append_empty(node, pos, nodes_visited - nodes_to_copy);
     *to_set = (void *) elt;
 #endif
@@ -896,7 +914,13 @@ static RRB* push_down_tail(const RRB *restrict rrb, RRB *restrict new_rrb,
  * - append_empty now returns a pointer to the *void we're supposed to set
  **/
 
-static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k) {
+#ifdef RRB_TAIL
+static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k,
+                                   const uint32_t tail_size)
+#else
+static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k)
+#endif
+{
   const InternalNode *current = (const InternalNode *) rrb->root;
   InternalNode **to_set = (InternalNode **) &new_rrb->root;
   uint32_t index = rrb->cnt - IF_TAIL(1, 0);
@@ -909,9 +933,17 @@ static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t 
     InternalNode *new_current;
     if (i != k) {
       new_current = internal_node_clone(current);
+      if (current->size_table != NULL) {
+        new_current->size_table = size_table_clone(new_current->size_table, new_current->len);
+        new_current->size_table->size[new_current->len-1] += IF_TAIL(tail_size, 1);
+      }
     }
     else { // increment size of last elt -- will only happen if we append empties
       new_current = internal_node_inc(current);
+      if (current->size_table != NULL) {
+        new_current->size_table->size[new_current->len-1] =
+          new_current->size_table->size[new_current->len-2] + IF_TAIL(tail_size, 1);
+      }
     }
     *to_set = new_current;
 
@@ -922,15 +954,11 @@ static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t 
     }
     else {
       // no need for sized_pos here, luckily.
-      child_index = current->len - 1;
+      child_index = new_current->len - 1;
       // Decrement index
       if (child_index != 0) {
         index -= current->size_table->size[child_index-1];
       }
-
-      // Increment size table -- happens only when there actually is one
-      new_current->size_table = size_table_clone(current->size_table, current->len);
-      new_current->size_table->size[child_index]++;
     }
     to_set = &new_current->child[child_index];
     current = current->child[child_index];
@@ -1526,13 +1554,12 @@ void rrb_to_dot(DotFile dot, const RRB *rrb) {
     }
 #endif
     if (rrb->root == NULL) {
-      fprintf(dot.file, "  s%d [label=\"NIL\"];\n", null_counter);
-      fprintf(dot.file, "  s%p:root -> s%d;\n", rrb, null_counter++);
+      fprintf(dot.file, "  s%p:root -> s%d;\n", rrb, null_counter);
     }
     else {
       fprintf(dot.file, "  s%p:root -> s%p:body;\n", rrb, rrb->root);
-      tree_node_to_dot(dot, rrb->root, true);
     }
+    tree_node_to_dot(dot, rrb->root, true);
   }
 }
 
@@ -1592,7 +1619,12 @@ static void internal_node_to_dot(DotFile dot, const InternalNode *root,
     }
 
     for (uint32_t i = 0; i < root->len; i++) {
-      fprintf(dot.file, "  s%p:%d -> s%p:body;\n", root, i, root->child[i]);
+      if (root->child[i] == NULL) {
+        fprintf(dot.file, "  s%p:%d -> s%d;\n", root, i, null_counter);
+      }
+      else {
+        fprintf(dot.file, "  s%p:%d -> s%p:body;\n", root, i, root->child[i]);
+      }
       tree_node_to_dot(dot, (TreeNode *) root->child[i], print_table);
     }
   }
@@ -1663,6 +1695,19 @@ static uint32_t node_size(DotArray *set, const TreeNode *root) {
     return node_bytes;
   }
   }
+}
+
+// Need to use GDB for using this. LLDB Cannot handle vararg correctly.
+void nodes_to_dot_file(char *loch, int ncount, ...) {
+  va_list nodes;
+  DotFile dot = dot_file_create(loch);
+
+  va_start(nodes, ncount);
+  for (int i = 0; i < ncount; i++) {
+    tree_node_to_dot(dot, va_arg(nodes, TreeNode*), true);
+  }
+  va_end(nodes);
+  dot_file_close(dot);
 }
 
 uint32_t rrb_memory_usage(const RRB *const *rrbs, uint32_t rrb_count) {
