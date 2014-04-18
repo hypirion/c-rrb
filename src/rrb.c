@@ -1158,6 +1158,8 @@ static const RRB* slice_right(const RRB *rrb, const uint32_t right) {
     new_rrb->cnt = right;
     new_rrb->root = root;
 #ifdef RRB_TAIL
+    // Not sure if this is necessary in this part of the program, due to issues
+    // wrt. slice_left and roots without size tables.
     promote_rightmost_leaf(new_rrb);
     new_rrb->tail_len = new_rrb->tail->len;
 #endif
@@ -1298,6 +1300,48 @@ const RRB* slice_left(const RRB *rrb, uint32_t left) {
 #ifdef RRB_TAIL
     new_rrb->tail = rrb->tail;
     new_rrb->tail_len = rrb->tail_len;
+
+    // TODO: I think the code below also applies to root nodes where size_table
+    // == NULL and (cnt - tail_len) & 0xff != 0, but it may be that this is
+    // resolved by slice_right itself. Perhaps not promote in the right slicing,
+    // but here instead?
+
+    // This case handles leaf nodes < RRB_BRANCHING size, by redistributing
+    // values from the tail into the actual leaf node.
+    if (RRB_SHIFT(new_rrb) == 0 && new_rrb->root != NULL) {
+      // two cases to handle: cnt <= RRB_BRANCHING
+      //     and (cnt - tail_len) <= RRB_BRANCHING
+
+      if (new_rrb->cnt <= RRB_BRANCHING) {
+        // can put all into a new tail
+        LeafNode *new_tail = leaf_node_create(new_rrb->cnt);
+
+        memcpy(&new_tail->child[0], &((LeafNode *) new_rrb->root)->child[0],
+               new_rrb->root->len * sizeof(void *));
+        memcpy(&new_tail->child[new_rrb->root->len], &new_rrb->tail->child[0],
+               new_rrb->tail_len * sizeof(void *));
+        new_rrb->tail_len = new_rrb->cnt;
+        new_rrb->root = NULL;
+        new_rrb->tail = new_tail;
+      }
+      else if (new_rrb->cnt - new_rrb->tail_len <= RRB_BRANCHING) {
+        // create both a new tail and a new root node
+        const uint32_t tail_cut = RRB_BRANCHING - new_rrb->root->len;
+        LeafNode *new_root = leaf_node_create(RRB_BRANCHING);
+        LeafNode *new_tail = leaf_node_create(tail_cut);
+
+        memcpy(&new_root->child[0], &((LeafNode *) new_rrb->root)->child[0],
+               new_rrb->root->len * sizeof(void *));
+        memcpy(&new_root->child[new_rrb->root->len], &new_rrb->tail->child[0],
+               tail_cut * sizeof(void *));
+        memcpy(&new_tail->child[0], &new_rrb->tail->child[tail_cut],
+               (new_rrb->tail_len - tail_cut) * sizeof(void *));
+
+        new_rrb->tail_len = new_rrb->tail_len - tail_cut;
+        new_rrb->tail = new_tail;
+        new_rrb->root = (TreeNode *) new_root;
+      }
+    }
 #endif
     return new_rrb;
   }
