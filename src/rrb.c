@@ -490,7 +490,6 @@ static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
   //       Like, honestly.
   RRBSizeTable *table = shuffle(all, shift, &top_len);
 
-  // all may leak out here.
   InternalNode *new_all = copy_across(all, table, top_len, shift);
   if (top_len <= RRB_BRANCHING) {
     if (is_top == false) {
@@ -556,12 +555,11 @@ static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
 
   InternalNode *new_all = internal_node_create(slen);
   uint32_t idx = 0;
-  uint32_t offset = 0;
 
   if (shift == INC_SHIFT(LEAF_NODE_SHIFT)) {
-    uint32_t i = 0;
-    while (i < slen) {
-      uint32_t new_size = sizes->size[i];
+    uint32_t offset = 0;
+    for (uint32_t i = 0; i < slen; i++) {
+      const uint32_t new_size = sizes->size[i];
       LeafNode *leaf = (LeafNode *) all->child[idx];
 
       if (offset == 0 && new_size == leaf->len) {
@@ -570,50 +568,44 @@ static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
       }
       else {
         uint32_t fill_count = 0;
-        uint32_t offs = offset;
-        uint32_t new_idx = idx;
 
         LeafNode *rta = NULL; // TODO: Rename
         LeafNode *ga = NULL; // TODO: Rename
 
-        while (fill_count < new_size && new_idx < all->len) {
-          const LeafNode *gaa = (LeafNode *) all->child[new_idx]; // TODO: Rename
+        while (fill_count < new_size && idx < all->len) {
+          const LeafNode *gaa = (LeafNode *) all->child[idx]; // TODO: Rename
 
           if (fill_count == 0) {
             // may leak here
             ga = leaf_node_create(new_size);
           }
 
-          if (new_size - fill_count >= gaa->len - offs) {
+          if (new_size - fill_count >= gaa->len - offset) {
             // issues here?
-            memcpy(&ga->child[fill_count], &gaa->child[offs],
-                   (gaa->len - offs) * sizeof(void *));
-            fill_count += gaa->len - offs;
-            new_idx++;
-            offs = 0;
+            memcpy(&ga->child[fill_count], &gaa->child[offset],
+                   (gaa->len - offset) * sizeof(void *));
+            fill_count += gaa->len - offset;
+            idx++;
+            offset = 0;
           }
           else {
             // issues here?
-            memcpy(&ga->child[fill_count], &gaa->child[offs],
+            memcpy(&ga->child[fill_count], &gaa->child[offset],
                    (new_size - fill_count) * sizeof(void *));
-            offs += new_size - fill_count;
+            offset += new_size - fill_count;
             fill_count = new_size;
           }
           rta = ga;
         }
 
-        idx = new_idx;
-        offset = offs;
         new_all->child[i] = (InternalNode *) rta;
       }
-
-      i++;
     }
   }
-  else { // not bottom
-    uint32_t i = 0;
-    while (i < slen) {
-      uint32_t new_size = sizes->size[idx];
+  else { // not at lowest non-leaf level
+    uint32_t offset = 0;
+    for (uint32_t i = 0; i < slen; i++) {
+      const uint32_t new_size = sizes->size[idx];
 
       InternalNode *node = (InternalNode *) all->child[idx];
 
@@ -623,41 +615,36 @@ static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
       }
       else {
         uint32_t fill_count = 0;
-        uint32_t offs = offset;
-        uint32_t new_idx = idx;
 
         InternalNode *rta = NULL; // TODO: rename
         InternalNode *aa = NULL; // TODO: rename
 
-        while (fill_count < new_size && new_idx < all->len) {
-          const InternalNode *aaa = all->child[new_idx];
+        while (fill_count < new_size && idx < all->len) {
+          const InternalNode *aaa = all->child[idx];
 
           if (fill_count == 0) {
             aa = internal_node_create(new_size);
           }
 
-          if (new_size - fill_count > aaa->len - offs) {
-            memcpy(&aa->child[fill_count], &aaa->child[offs],
-                   (aaa->len - offs) * sizeof(InternalNode *));
-            new_idx++;
-            fill_count += aaa->len - offs;
-            offs = 0;
+          if (new_size - fill_count > aaa->len - offset) {
+            memcpy(&aa->child[fill_count], &aaa->child[offset],
+                   (aaa->len - offset) * sizeof(InternalNode *));
+            idx++;
+            fill_count += aaa->len - offset;
+            offset = 0;
           }
           else {
-            memcpy(&aa->child[fill_count], &aaa->child[offs],
+            memcpy(&aa->child[fill_count], &aaa->child[offset],
                    (new_size - fill_count) * sizeof(InternalNode *));
-            offs += new_size - fill_count;
+            offset += new_size - fill_count;
             fill_count = new_size;
           }
           rta = aa;
         }
 
         rta = set_sizes(rta, DEC_SHIFT(shift));
-        idx = new_idx;
-        offset = offs;
         new_all->child[i] = rta;
       }
-      i++;
     }
   }
   return new_all;
