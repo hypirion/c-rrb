@@ -1293,10 +1293,17 @@ const RRB* slice_left(const RRB *rrb, uint32_t left) {
     // there.
 #endif
     RRB *new_rrb = rrb_mutable_create();
-    TreeNode *root = slice_left_rec(&RRB_SHIFT(new_rrb), rrb->root, left,
-                                    RRB_SHIFT(rrb), false);
+    InternalNode *root = (InternalNode *)
+      slice_left_rec(&RRB_SHIFT(new_rrb), rrb->root, left,
+                     RRB_SHIFT(rrb), false);
     new_rrb->cnt = remaining;
-    new_rrb->root = root;
+    new_rrb->root = (TreeNode *) root;
+
+    // Ensure last element in size table is correct size, if the root is an
+    // internal node.
+    if (new_rrb->shift != LEAF_NODE_SHIFT && root->size_table != NULL) {
+      root->size_table->size[root->len-1] = new_rrb->cnt - IF_TAIL(rrb->tail_len, 0);
+    }
 #ifdef RRB_TAIL
     new_rrb->tail = rrb->tail;
     new_rrb->tail_len = rrb->tail_len;
@@ -1401,6 +1408,9 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
       const uint32_t sliced_len = internal_root->len - subidx;
       InternalNode *sliced_root = internal_node_create(sliced_len);
 
+      // TODO: Can shrink size here if sliced_len == 2, using the ambidextrous
+      // vector technique. Takes effectively constant time.
+
       memcpy(&sliced_root->child[1], &internal_root->child[subidx + 1],
              (sliced_len - 1) * sizeof(InternalNode *));
 
@@ -1408,7 +1418,8 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
 
       // TODO: Can check if left is a power of the tree size. If so, all nodes
       // will be completely populated, and we can ignore the size table. Most
-      // importantly, this will remove the need to alloc a size table.
+      // importantly, this will remove the need to alloc a size table, which
+      // increases perf.
       RRBSizeTable *sliced_table = size_table_create(sliced_len);
 
       if (table == NULL) {
@@ -1416,6 +1427,10 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
           // left is total amount sliced off. By adding in subidx, we get faster
           // computation later on.
           sliced_table->size[i] = (subidx + 1 + i) << shift;
+          // ISSUE: This doesn't really work properly for top root, as last node
+          // may have a higher count than it *actually* has. To remedy for this,
+          // the top function performs a check afterwards, which may insert the
+          // correct value if there's a size table in the root.
         }
       }
       else { // if (table != NULL)
