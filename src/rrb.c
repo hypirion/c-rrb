@@ -873,8 +873,8 @@ static RRB* push_down_tail(const RRB *restrict rrb, RRB *restrict new_rrb,
     if (rrb->root->type != LEAF_NODE &&
         ((const InternalNode *)rrb->root)->size_table != NULL) {
       RRBSizeTable *table = size_table_create(2);
-      table->size[0] = rrb->cnt;
-      table->size[1] = rrb->cnt + 1; // appending only one, so only one more.
+      table->size[0] = rrb->cnt - IF_TAIL(old_tail->len, 0);
+      table->size[1] = rrb->cnt + IF_TAIL(old_tail->len, 1);
       new_root->size_table = table;
     }
 
