@@ -1317,7 +1317,7 @@ const RRB* slice_left(const RRB *rrb, uint32_t left) {
     // values from the tail into the actual leaf node.
     if (RRB_SHIFT(new_rrb) == 0 && new_rrb->root != NULL) {
       // two cases to handle: cnt <= RRB_BRANCHING
-      //     and (cnt - tail_len) <= RRB_BRANCHING
+      //     and (cnt - tail_len) < RRB_BRANCHING
 
       if (new_rrb->cnt <= RRB_BRANCHING) {
         // can put all into a new tail
@@ -1331,11 +1331,13 @@ const RRB* slice_left(const RRB *rrb, uint32_t left) {
         new_rrb->root = NULL;
         new_rrb->tail = new_tail;
       }
-      else if (new_rrb->cnt - new_rrb->tail_len <= RRB_BRANCHING) {
+      // no need for <= here, because if the root node is == rrb_branching, the
+      // invariant is kept.
+      else if (new_rrb->cnt - new_rrb->tail_len < RRB_BRANCHING) {
         // create both a new tail and a new root node
         const uint32_t tail_cut = RRB_BRANCHING - new_rrb->root->len;
         LeafNode *new_root = leaf_node_create(RRB_BRANCHING);
-        LeafNode *new_tail = leaf_node_create(tail_cut);
+        LeafNode *new_tail = leaf_node_create(new_rrb->tail_len - tail_cut);
 
         memcpy(&new_root->child[0], &((LeafNode *) new_rrb->root)->child[0],
                new_rrb->root->len * sizeof(void *));
