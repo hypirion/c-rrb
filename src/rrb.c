@@ -270,7 +270,17 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
 
         new_rrb->tail = push_down;
         new_rrb->tail_len = new_tail_len;
-        return push_down_tail(left, new_rrb, new_tail);
+
+        // This is an imitation, so that push_down_tail works as we intend it
+        // to: Whenever the height has to be increased, it calculates the size
+        // table based upon the old rrb's size, minus the old tail. However,
+        // since we manipulate the old tail to be longer than it actually was,
+        // we have to reflect those changes in the cnt variable.
+        RRB left_imitation;
+        memcpy(&left_imitation, left, sizeof(RRB));
+        left_imitation.cnt = new_rrb->cnt - new_tail_len;
+
+        return push_down_tail(&left_copy, new_rrb, new_tail);
       }
     }
     left = push_down_tail(left, rrb_head_clone(left), NULL);
