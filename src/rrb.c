@@ -1380,7 +1380,15 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
     if (subidx == last_slot) { // No more slots left
       if (has_right) {
         InternalNode *left_hand_parent = internal_node_create(1);
-        left_hand_parent->child[0] = (InternalNode *) left_hand_node;
+        const InternalNode *internal_left_hand_node = (InternalNode *) left_hand_node;
+        left_hand_parent->child[0] = internal_left_hand_node;
+
+        if (subshift != LEAF_NODE_SHIFT && internal_left_hand_node->size_table != NULL) {
+          RRBSizeTable *sliced_table = size_table_create(1);
+          sliced_table->size[0] =
+            internal_left_hand_node->size_table->size[internal_left_hand_node->len-1];
+          left_hand_parent->size_table = sliced_table;
+        }
         *total_shift = shift;
         return (TreeNode *) left_hand_parent;
       }
