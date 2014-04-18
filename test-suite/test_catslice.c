@@ -32,9 +32,9 @@
 #define CATTED 2310
 #define TOT_CATTED 10
 
-int main() {
+int main(int argc, char *argv[]) {
   GC_INIT();
-  randomize_rand();
+  setup_rand(argc == 2 ? argv[1] : NULL);
 
   int fail = 0;
   
