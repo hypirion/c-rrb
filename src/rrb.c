@@ -103,8 +103,8 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
 static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
                                InternalNode *right, uint32_t shift,
                                char is_top);
-static RRBSizeTable* shuffle(InternalNode *all, uint32_t shift, uint32_t *tlen);
-static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
+static uint32_t* shuffle(InternalNode *all, uint32_t *top_len);
+static InternalNode* copy_across(InternalNode *all, uint32_t *node_sizes,
                                  uint32_t slen, uint32_t shift);
 static uint32_t find_shift(TreeNode *node);
 static InternalNode* set_sizes(InternalNode *node, uint32_t shift);
@@ -486,11 +486,10 @@ static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
   InternalNode *all = internal_node_merge(left, centre, right);
   // top_len is children count of the internal node returned.
   uint32_t top_len; // populated through pointer manipulation.
-  // TODO: We return a struct here, really. Makes stuff easier to reason about.
-  //       Like, honestly.
-  RRBSizeTable *table = shuffle(all, shift, &top_len);
 
-  InternalNode *new_all = copy_across(all, table, top_len, shift);
+  uint32_t *node_count = shuffle(all, &top_len);
+
+  InternalNode *new_all = copy_across(all, node_count, top_len, shift);
   if (top_len <= RRB_BRANCHING) {
     if (is_top == false) {
       return internal_node_new_above1(set_sizes(new_all, shift));
@@ -508,48 +507,58 @@ static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
   }
 }
 
-static RRBSizeTable* shuffle(InternalNode *all, uint32_t shift, uint32_t *top_len) {
-  RRBSizeTable *table = size_table_create(all->len);
+/**
+ * Shuffle takes in the large concatenated internal node and a pointer to an
+ * uint32_t, which will contain the reduced size of the rebalanced node. It
+ * returns a plan as an array of uint32_t's, and modifies the input pointer to
+ * contain the length of said array.
+ */
 
-  uint32_t table_len = 0;
+static uint32_t* shuffle(InternalNode *all, uint32_t *top_len) {
+  uint32_t *node_count = GC_MALLOC_ATOMIC(all->len * sizeof(uint32_t));
+
+  uint32_t total_nodes = 0;
   for (uint32_t i = 0; i < all->len; i++) {
-    uint32_t size = all->child[i]->len;
-    table->size[i] = size;
-    table_len += size;
+    const uint32_t size = all->child[i]->len;
+    node_count[i] = size;
+    total_nodes += size;
   }
 
-  const uint32_t effective_slot = (table_len / RRB_BRANCHING) + 1;
+  const uint32_t effective_slot = (total_nodes / RRB_BRANCHING) + 1;
 
-  uint32_t new_len = all->len;
-  while (new_len > effective_slot + RRB_EXTRAS) {
-
+  uint32_t shuffled_len = all->len;
+  for (; effective_slot + RRB_EXTRAS < shuffled_len; shuffled_len--) {
     uint32_t i = 0;
-    while (table->size[i] > RRB_BRANCHING - RRB_INVARIANT) {
-      // TODO: Could this segfault? if all sizes > RRB_BRANCHING - RRB_INVARIANT?
-      i++;
-    }
-    // Found short node, so redistribute over the following nodes
-    uint32_t el = table->size[i]; // TODO: Rename el to something more understandable.
-    do { // TODO: For loopify
-      uint32_t min_size = MIN(el + table->size[i+1], RRB_BRANCHING);
-      table->size[i] = min_size;
-      el = el + table->size[i+1] - min_size;
-      i++;
-    } while (el > 0);
 
-    // Shuffle up remaining slot sizes
-    while (i < new_len - 1) {
-      table->size[i] = table->size[i+1];
-      i++; // TODO: Replace with for loop
+    // Skip over all nodes satisfying the invariant.
+    while (node_count[i] > RRB_BRANCHING - RRB_INVARIANT) {
+      // TODO: Could this segfault? if all sizes > RRB_BRANCHING -
+      // RRB_INVARIANT? Don't think so, as for loop condition would be broken
+      // then. But verify this.
+      i++;
     }
-    new_len--;
+
+    // Found short node, so redistribute over the next nodes
+    uint32_t remaining_nodes = node_count[i];
+    do {
+      const uint32_t min_size = MIN(remaining_nodes + node_count[i+1], RRB_BRANCHING);
+      node_count[i] = min_size;
+      remaining_nodes = remaining_nodes + node_count[i+1] - min_size;
+      i++;
+    } while (remaining_nodes > 0);
+
+    // Shuffle up remaining node sizes
+    while (i < shuffled_len - 1) {
+      node_count[i] = node_count[i+1]; // Could use memcpy here I guess
+      i++;
+    }
   }
 
-  *top_len = new_len; // TODO: Return as part of a struct instead.
-  return table;
+  *top_len = shuffled_len;
+  return node_count;
 }
 
-static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
+static InternalNode* copy_across(InternalNode *all, uint32_t *node_size,
                                  uint32_t slen, uint32_t shift) {
   // the all vector doesn't have sizes set yet.
 
@@ -559,7 +568,7 @@ static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
   if (shift == INC_SHIFT(LEAF_NODE_SHIFT)) {
     uint32_t offset = 0;
     for (uint32_t i = 0; i < slen; i++) {
-      const uint32_t new_size = sizes->size[i];
+      const uint32_t new_size = node_size[i];
       LeafNode *leaf = (LeafNode *) all->child[idx];
 
       if (offset == 0 && new_size == leaf->len) {
@@ -605,7 +614,7 @@ static InternalNode* copy_across(InternalNode *all, RRBSizeTable *sizes,
   else { // not at lowest non-leaf level
     uint32_t offset = 0;
     for (uint32_t i = 0; i < slen; i++) {
-      const uint32_t new_size = sizes->size[idx];
+      const uint32_t new_size = node_size[i];
 
       InternalNode *node = (InternalNode *) all->child[idx];
 
