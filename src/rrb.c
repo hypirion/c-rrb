@@ -270,7 +270,17 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
 
         new_rrb->tail = push_down;
         new_rrb->tail_len = new_tail_len;
-        return push_down_tail(left, new_rrb, new_tail);
+
+        // This is an imitation, so that push_down_tail works as we intend it
+        // to: Whenever the height has to be increased, it calculates the size
+        // table based upon the old rrb's size, minus the old tail. However,
+        // since we manipulate the old tail to be longer than it actually was,
+        // we have to reflect those changes in the cnt variable.
+        RRB left_imitation;
+        memcpy(&left_imitation, left, sizeof(RRB));
+        left_imitation.cnt = new_rrb->cnt - new_tail_len;
+
+        return push_down_tail(&left_copy, new_rrb, new_tail);
       }
     }
     left = push_down_tail(left, rrb_head_clone(left), NULL);
@@ -728,7 +738,7 @@ static inline RRB* rrb_tail_push(const RRB *restrict rrb, const void *restrict e
 #define TAIL_OPTIMISATION(rrb, elt) /* We explicitly do NOT use a tail. */
 #endif
 
-#ifdef DIRECT_APPEND
+#if defined(DIRECT_APPEND) || defined(RRB_TAIL)
 #ifdef RRB_TAIL
 static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k,
                                    const uint32_t tail_size);
@@ -870,7 +880,16 @@ static RRB* push_down_tail(const RRB *restrict rrb, RRB *restrict new_rrb,
         ((const InternalNode *)rrb->root)->size_table != NULL) {
       RRBSizeTable *table = size_table_create(2);
       table->size[0] = rrb->cnt - IF_TAIL(old_tail->len, 0);
-      table->size[1] = rrb->cnt + IF_TAIL(old_tail->len, 1);
+      // If we insert the tail, the old size minus the old tail size will be the
+      // amount of elements in the left branch. If there is no tail, the size is
+      // just the old rrb-tree.
+
+      table->size[1] = rrb->cnt + IF_TAIL(0, 1);
+      // If we insert the tail, the old size would include the tail.
+      // Consequently, it has to be the old size. If we have no tail, we append
+      // a single element to the old vector, therefore it has to be one more
+      // than the original.
+
       new_root->size_table = table;
     }
 
