@@ -728,7 +728,7 @@ static inline RRB* rrb_tail_push(const RRB *restrict rrb, const void *restrict e
 #define TAIL_OPTIMISATION(rrb, elt) /* We explicitly do NOT use a tail. */
 #endif
 
-#ifdef DIRECT_APPEND
+#if defined(DIRECT_APPEND) || defined(RRB_TAIL)
 #ifdef RRB_TAIL
 static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k,
                                    const uint32_t tail_size);
