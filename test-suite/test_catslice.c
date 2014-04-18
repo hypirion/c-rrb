@@ -32,9 +32,9 @@
 #define CATTED 2310
 #define TOT_CATTED 10
 
-int main() {
+int main(int argc, char *argv[]) {
   GC_INIT();
-  randomize_rand();
+  setup_rand(argc == 2 ? argv[1] : NULL);
 
   int fail = 0;
   
@@ -51,12 +51,14 @@ int main() {
   }
 
   for (uint32_t i = 0; i < CATTED; i++) {
-    const RRB *multicat = rrb_create(); // Originally empty
     uint32_t tot_cats = (uint32_t) rand() % TOT_CATTED;
+    const RRB *multicat = rrb_create(); // Originally empty
+    const RRB **catsteps = GC_MALLOC(sizeof(RRB *) * tot_cats);
     uint32_t *merged_in = GC_MALLOC_ATOMIC(sizeof(uint32_t) * tot_cats);
     for (uint32_t cat_num = 0; cat_num < tot_cats; cat_num++) {
       merged_in[cat_num] = (uint32_t) rand() % SLICED;
       multicat = rrb_concat(multicat, sliced[merged_in[cat_num]]);
+      catsteps[cat_num] = multicat;
     }
     
     // checking consistency here
