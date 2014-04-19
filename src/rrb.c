@@ -280,7 +280,7 @@ const RRB* rrb_concat(const RRB *left, const RRB *right) {
         memcpy(&left_imitation, left, sizeof(RRB));
         left_imitation.cnt = new_rrb->cnt - new_tail_len;
 
-        return push_down_tail(&left_copy, new_rrb, new_tail);
+        return push_down_tail(&left_imitation, new_rrb, new_tail);
       }
     }
     left = push_down_tail(left, rrb_head_clone(left), NULL);
