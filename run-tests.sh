@@ -8,7 +8,7 @@ fi
 export CC='clang'
 export CFLAGS='-O0 -g'
 
-OPTIONS=(rrb-debug direct-append)
+OPTIONS=(rrb-debug direct-append tail)
 OPT_PERMS=$(( 2 ** ${#OPTIONS[@]} ))
 
 if [ "$1" = "full" ]; then
@@ -19,7 +19,7 @@ fi
 
 for b in $BRANCHING; do 
     for (( i=0; i < OPT_PERMS; i++ )); do
-        FLAGS="--disable-tail --with-branching=$b"
+        FLAGS="--with-branching=$b"
         for (( j=0; j < ${#OPTIONS[@]}; j++)); do
             if [ $(( (i >> j) & 1)) -eq 1 ]; then
                 ENABLE_PRE="enable"
