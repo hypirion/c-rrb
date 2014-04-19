@@ -1779,7 +1779,8 @@ static uint32_t node_size(DotArray *set, const TreeNode *root) {
   }
 }
 
-// Need to use GDB for using this. LLDB Cannot handle vararg correctly.
+// Need to use GCC for using this. Clang cannot handle vararg -g-symbols
+// correctly (yet)
 void nodes_to_dot_file(char *loch, int ncount, ...) {
   va_list nodes;
   DotFile dot = dot_file_create(loch);
@@ -1790,6 +1791,114 @@ void nodes_to_dot_file(char *loch, int ncount, ...) {
   }
   va_end(nodes);
   dot_file_close(dot);
+}
+
+static void validate_subtree(const TreeNode *root, uint32_t expected_size,
+                             uint32_t root_shift, uint32_t *fail) {
+  if (root_shift == LEAF_NODE_SHIFT) { // leaf node
+    if (root->type != LEAF_NODE) {
+      puts("Expected this node to be a leaf node, but it claims to be "
+           "something else.\n Will treat it like a leaf node, "
+           "so may segfault.");
+      *fail = 1;
+    }
+    const LeafNode *leaf = (const LeafNode *) root;
+    if (leaf->len != expected_size) {
+      printf("Leaf node claims to be %u elements long, but was expected to be "
+             "%u\n elements long. Will attempt to read %u elements.\n",
+             leaf->len, expected_size, MAX(leaf->len, expected_size));
+      *fail = 1;
+    }
+    uintptr_t c = 0;
+    // dummy counter to avoid optimization at lower levels (although probably
+    // unneccesary). Note that this will probably be filtered out with -O2 and
+    // higher, so run with '-O0 -g'.
+    for (uint32_t i = 0; i < MAX(leaf->len, expected_size); i++) {
+      c += (uintptr_t) leaf->child[i];
+    }
+  }
+  else {
+    if (root->type != INTERNAL_NODE) {
+      puts("Expected this node to be an internal node, but it claims to be "
+           "something else.\n Will treat it like an internal node, "
+           "so may segfault.");
+      *fail = 1;
+    }
+    const InternalNode *internal = (const InternalNode *) root;
+    if (internal->size_table != NULL) {
+      // expected size should be consistent with what's in the last size table
+      // slot
+      if (internal->size_table->size[internal->len-1] != expected_size) {
+        printf("Expected subtree to be of size %u, but its size table says it "
+               "is %u.\n", expected_size,
+               internal->size_table->size[internal->len-1]);
+        *fail = 1;
+      }
+      for (uint32_t i = 0; i < internal->len; i++) {
+        uint32_t size_sub_trie = internal->size_table->size[i]
+                               - (i == 0 ? 0 : internal->size_table->size[i-1]);
+        validate_subtree((const TreeNode *) internal->child[i], size_sub_trie,
+                         DEC_SHIFT(root_shift), fail);
+      }
+    }
+    else { // internal->size_table == NULL
+      // this tree may contain at most (internal->len << shift) elements, not
+      // more. Effectively, the tree contains (len - 1) << shift + last_tree_len
+      // (1 << shift) >= last_tree_len > 0
+      const uint32_t child_shift = DEC_SHIFT(root_shift);
+      const uint32_t child_max_size = 1 << root_shift;
+
+      if (expected_size > internal->len * child_max_size) {
+        printf("Expected size (%u) is larger than what can possibly be inside "
+               "this subtree: %u.\n", expected_size,
+               internal->len * child_max_size);
+        *fail = 1;
+      }
+      else if (expected_size < ((internal->len - 1) * child_max_size)) {
+        printf("Expected size (%u) is smaller than %u, implying that some "
+               "non-rightmost node\n is not completely populated.\n",
+               expected_size, ((internal->len - 1) << root_shift));
+        *fail = 1;
+      }
+      for (uint32_t i = 0; i < internal->len - 1; i++) {
+        validate_subtree((const TreeNode *) internal->child[i], child_max_size,
+                         child_shift, fail);
+      }
+      validate_subtree((const TreeNode *) internal->child[internal->len - 1],
+                       expected_size - ((internal->len - 1) * child_max_size),
+                       child_shift, fail);
+    }
+  }
+}
+
+uint32_t validate_rrb(const RRB *rrb) {
+  // ensure the rrb tree is consistent
+  uint32_t fail = 0;
+#ifdef RRB_TAIL
+  // the rrb tree should always have a tail
+  if (rrb->tail->len != rrb->tail_len) {
+    fail = 1;
+    printf("The tail of this rrb-tree says it is of length %u, but the rrb head"
+           "claims it\nis %u elements long.", rrb->tail->len, rrb->tail_len);
+  }
+  else {
+    validate_subtree((TreeNode *) rrb->tail, rrb->tail_len, LEAF_NODE_SHIFT,
+                     &fail);
+  }
+#endif
+  if (rrb->root == NULL) {
+    if (rrb->cnt - IF_TAIL(rrb->tail_len, 0) != 0) {
+      printf("Root is null, but the size of the vector "
+             IF_TAIL("(excluding its tail) ","") "is %u.\n",
+             rrb->cnt - IF_TAIL(rrb->tail_len, 0));
+      fail = 1;
+    }
+  }
+  else {
+    validate_subtree(rrb->root, rrb->cnt - IF_TAIL(rrb->tail_len, 0),
+                      rrb->shift, &fail);
+  }
+  return fail;
 }
 
 uint32_t rrb_memory_usage(const RRB *const *rrbs, uint32_t rrb_count) {

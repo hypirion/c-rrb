@@ -79,5 +79,6 @@ uint32_t rrb_memory_usage(const RRB *const *rrbs, uint32_t rrb_count);
 
 // For internal debugging purposes
 void nodes_to_dot_file(char *loch, int ncount, ...);
+uint32_t validate_rrb(const RRB *rrb);
 #endif
 #endif
