@@ -42,6 +42,7 @@ int main() {
   const RRB *rrb = rrb_create();
   for (uint32_t i = 0; i < SIZE; i++) {
     rrb = rrb_push(rrb, (void *) list[i]);
+    // fail |= CHECK_TREE(rrb); // Too costly
   }
 
   intptr_t *updated_list = GC_MALLOC_ATOMIC(sizeof(intptr_t) * UPDATES);
@@ -56,6 +57,7 @@ int main() {
     const RRB *old_rrb = rrb;
 
     rrb = rrb_update(rrb, idx, (void *) updated_list[i]);
+    // fail |= CHECK_TREE(rrb); // Too costly
 
     intptr_t old_val = (intptr_t) rrb_nth(old_rrb, idx);
     intptr_t new_val = (intptr_t) rrb_nth(rrb, idx);

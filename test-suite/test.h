@@ -30,6 +30,12 @@ void randomize_rand(void);
 void print_rrb(const RRB *rrb);
 void setup_rand(const char *str_seed);
 
+#ifdef RRB_DEBUG
+#define CHECK_TREE(t) (validate_rrb(t))
+#else
+#define CHECK_TREE(t) (0)
+#endif
+
 void setup_rand(const char *str_seed) {
   if (str_seed == NULL) {
     randomize_rand();

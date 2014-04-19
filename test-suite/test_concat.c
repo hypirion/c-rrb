@@ -42,6 +42,7 @@ int main() {
     rrb2 = rrb_push(rrb2, (void *)((intptr_t) rand()));
     
     const RRB* catted = rrb_concat(rrb1, rrb2);
+    fail |= CHECK_TREE(catted);
     for (uint32_t j = 0; j < (i + 1) * 2; j++) {
       intptr_t val_cat = (intptr_t) rrb_nth(catted, j);
       if (j <= i) {

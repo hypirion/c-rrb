@@ -41,6 +41,7 @@ int main() {
   const RRB *rrb = rrb_create();
   for (uint32_t i = 0; i < SIZE; i++) {
     rrb = rrb_push(rrb, (void *) list[i]);
+    // fail |= CHECK_TREE(rrb); // Too costly, so taken out.
     intptr_t val = (intptr_t) rrb_peek(rrb);
     if (val != list[i]) {
       printf("Expected val at pos %d to be %ld, was %ld.\n", i, list[i], val);

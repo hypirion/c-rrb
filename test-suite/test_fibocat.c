@@ -54,10 +54,12 @@ int main(int argc, char *argv[]) {
 
   for (uint32_t i = 0; i < PREDEF_RRBS; i++) {
     rrbs[i] = rand_rrb();
+    fail |= CHECK_TREE(rrbs[i]);
   }
 
   for (uint32_t i = PREDEF_RRBS; i < RRB_COUNT; i++) {
     rrbs[i] = rrb_concat(rrbs[i - PREDEF_RRBS], rrbs[i - PREDEF_RRBS + 1]);
+    fail |= CHECK_TREE(rrbs[i]);
   }
 
   for (uint32_t i = PREDEF_RRBS; i < RRB_COUNT; i++) {

@@ -41,6 +41,7 @@ int main() {
   const RRB *rrb = rrb_create();
   for (uint32_t i = 0; i < SIZE; i++) {
     rrb = rrb_push(rrb, (void *) list[i]);
+    // fail |= CHECK_TREE(rrb); // Generally too costly.
   }
   for (uint32_t i = 0; i < SIZE; i++) {
     intptr_t val = (intptr_t) rrb_nth(rrb, i);

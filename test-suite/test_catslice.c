@@ -48,6 +48,7 @@ int main(int argc, char *argv[]) {
     uint32_t from = (uint32_t) rand() % SIZE;
     uint32_t to = (uint32_t) (rand() % (SIZE - from)) + from;
     sliced[i] = rrb_slice(rrb, from, to);
+    fail |= CHECK_TREE(sliced[i]);
   }
 
   for (uint32_t i = 0; i < CATTED; i++) {
@@ -59,6 +60,7 @@ int main(int argc, char *argv[]) {
       merged_in[cat_num] = (uint32_t) rand() % SLICED;
       multicat = rrb_concat(multicat, sliced[merged_in[cat_num]]);
       catsteps[cat_num] = multicat;
+      fail |= CHECK_TREE(multicat);
     }
     
     // checking consistency here
