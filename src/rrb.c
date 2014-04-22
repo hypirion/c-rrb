@@ -53,27 +53,39 @@
 #define DEC_SHIFT(shift) (shift - (uint32_t) RRB_BITS)
 #define LEAF_NODE_SHIFT ((uint32_t) 0)
 
+#ifdef TRANSIENTS
+// Abusing allocated pointers being unique to create GUIDs: using a single
+// malloc to create a guid.
+#define GUID_DECLARATION void *guid;
+#else
+#define GUID_DECLARATION
+#endif
+
 typedef enum {LEAF_NODE, INTERNAL_NODE} NodeType;
 
 typedef struct TreeNode {
   NodeType type;
   uint32_t len;
+  GUID_DECLARATION
 } TreeNode;
 
 typedef struct LeafNode {
   NodeType type;
   uint32_t len;
+  GUID_DECLARATION
   const void *child[];
 } LeafNode;
 
 typedef struct RRBSizeTable {
   char t; // Dummy variable to avoid empty struct. FIXME
+  GUID_DECLARATION
   uint32_t size[];
 } RRBSizeTable;
 
 typedef struct InternalNode {
   NodeType type;
   uint32_t len;
+  GUID_DECLARATION
   RRBSizeTable *size_table;
   struct InternalNode *child[];
 } InternalNode;
@@ -95,6 +107,20 @@ static const RRB EMPTY_RRB = {.cnt = 0, .shift = 0, .root = NULL,
                               .tail_len = 0, .tail = &EMPTY_LEAF};
 #else
 static const RRB EMPTY_RRB = {.cnt = 0, .shift = 0, .root = NULL};
+#endif
+
+#ifdef TRANSIENTS
+struct _TransientRRB {
+  uint32_t cnt;
+  uint32_t shift;
+#ifdef RRB_TAIL
+  uint32_t tail_len;
+  LeafNode *tail;
+#endif
+  TreeNode *root;
+  RRBThread owner;
+  GUID_DECLARATION
+};
 #endif
 
 static RRBSizeTable* size_table_create(uint32_t len);
