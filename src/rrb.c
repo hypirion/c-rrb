@@ -183,6 +183,16 @@ static void promote_rightmost_leaf(RRB *new_rrb);
 #define IF_TAIL(a, b) b
 #endif
 
+#ifdef TRANSIENTS
+
+static void* rrb_guid_create(void);
+static TransientRRB* transient_rrb_head_create(const RRB* rrb);
+static void check_transience(const TransientRRB *trrb);
+static InternalNode* ensure_internal_editable(InternalNode *internal, void *guid);
+static LeafNode* ensure_leaf_editable(LeafNode *leaf, void *guid);
+
+#endif
+
 #ifdef RRB_DEBUG
 #include <stdio.h>
 #include <stdarg.h>
@@ -1570,6 +1580,49 @@ const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restr
 static void* rrb_guid_create() {
   return (void *) RRB_MALLOC_ATOMIC(1);
 }
+
+// creates a new guid -- at least for now. Check if necessary later on.
+static TransientRRB* transient_rrb_head_create(const RRB* rrb) {
+  TransientRRB *trrb = RRB_MALLOC(sizeof(TransientRRB));
+  memcpy(rrb, trrb, sizeof(RRB));
+  trrb->owner = RRB_THREAD_ID();
+  trrb->guid = rrb_guid_create();
+  return trrb;
+}
+
+static void check_transience(const TransientRRB *trrb) {
+  if (trrb->guid == NULL) {
+    // Transient used after transient_to_persistent call
+    exit(1);
+  }
+  if (!RRB_THREAD_EQUALS(trrb->owner, RRB_THREAD_ID())) {
+    // Transient used by non-owner thread
+    exit(1);
+  }
+}
+
+static InternalNode* ensure_internal_editable(InternalNode *internal, void *guid) {
+  if (internal->guid == guid) {
+    return internal;
+  }
+  else {
+    InternalNode *copy = internal_node_clone(internal);
+    copy->guid = guid;
+    return copy;
+  }
+}
+
+static LeafNode* ensure_leaf_editable(LeafNode *leaf, void *guid) {
+  if (leaf->guid == guid) {
+    return leaf;
+  }
+  else {
+    LeafNode *copy = leaf_node_clone(leaf);
+    copy->guid = guid;
+    return copy;
+  }
+}
+
 
 #endif
 /******************************************************************************/
