@@ -27,6 +27,10 @@
 #include <string.h>
 #include "rrb.h"
 
+#ifdef TRANSIENTS
+#include "rrb_thread.h"
+#endif
+
 #ifndef true
 #define true 1
 #endif

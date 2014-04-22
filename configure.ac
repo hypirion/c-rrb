@@ -65,6 +65,9 @@ AM_CONDITIONAL([TRANSIENTS], [test x$transients = xtrue])
 
 if test x$transients = xtrue; then
    AC_DEFINE([TRANSIENTS])
+   AC_CHECK_LIB([pthread], [pthread_self], [THREADLIB=-pthread],
+             AC_MSG_ERROR([Needs pthread installed for transients.]))
+   AC_SUBST([THREADLIB])
 fi
 
 dnl Direct append
