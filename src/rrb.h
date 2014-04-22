@@ -30,6 +30,7 @@
 #warning "You don't seem to use config.h -- most efficient options are picked."
 #define DIRECT_APPEND 1
 #define RRB_TAIL 1
+#define TRANSIENTS 1
 #else
 #include <config.h>
 #endif

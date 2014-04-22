@@ -48,6 +48,25 @@ do
   RRB_MAX_HEIGHT_BITS=`expr $RRB_MAX_HEIGHT_BITS + $RRB_BITS`
 done]
 
+dnl Transients
+
+AH_TEMPLATE([TRANSIENTS],
+        [Include transient RRBs and related functions.])
+
+AC_ARG_ENABLE([transients],
+[  --disable-transients    Disable transients],
+[case "${enableval}" in
+  yes) transients=true ;;
+  no)  transients=false ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-transients]) ;;
+esac],[transients=true])
+
+AM_CONDITIONAL([TRANSIENTS], [test x$transients = xtrue])
+
+if test x$transients = xtrue; then
+   AC_DEFINE([TRANSIENTS])
+fi
+
 dnl Direct append
 
 AH_TEMPLATE([DIRECT_APPEND],
@@ -85,7 +104,6 @@ if test x$rrb_debug = xtrue; then
 fi
 
 dnl Number of bits in the rrb tree
-dnl Used inside makefile.ac, not inserted inside config.h
 
 AC_ARG_WITH([branching],
         [AS_HELP_STRING([--with-branching=bits : number of bits per branching])],
