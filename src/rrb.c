@@ -555,7 +555,7 @@ static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
  */
 
 static uint32_t* shuffle(InternalNode *all, uint32_t *top_len) {
-  uint32_t *node_count = GC_MALLOC_ATOMIC(all->len * sizeof(uint32_t));
+  uint32_t *node_count = RRB_MALLOC_ATOMIC(all->len * sizeof(uint32_t));
 
   uint32_t total_nodes = 0;
   for (uint32_t i = 0; i < all->len; i++) {
@@ -1562,6 +1562,16 @@ const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restr
   }
 }
 
+/******************************************************************************/
+/*                                 TRANSIENCE                                 */
+/******************************************************************************/
+#ifdef TRANSIENTS
+
+static void* rrb_guid_create() {
+  return (void *) RRB_MALLOC_ATOMIC(1);
+}
+
+#endif
 /******************************************************************************/
 /*                    DEBUGGING AND VISUALIZATION METHODS                     */
 /******************************************************************************/
