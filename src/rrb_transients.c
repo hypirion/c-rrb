@@ -137,4 +137,13 @@ TransientRRB* rrb_to_transient(const RRB *rrb) {
   }
   return trrb;
 }
+
+void* transient_rrb_nth(const TransientRRB *trrb, uint32_t index) {
+  return rrb_nth((const RRB *) trrb, index);
+}
+
+void* transient_rrb_peek(const TransientRRB *trrb) {
+  return transient_rrb_nth(trrb, trrb->cnt - 1);
+}
+
 #endif
