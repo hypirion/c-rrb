@@ -416,6 +416,7 @@ static InternalNode** mutate_first_k(TransientRRB *trrb, const uint32_t k) {
         table->size[current->len-1] =
           table->size[current->len-2] + IF_TAIL(RRB_BRANCHING, 1);
       }
+      current->size_table = table;
     }
 
     // calculate child index
