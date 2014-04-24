@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
   TransientRRB *trrb = rrb_to_transient(rrb_create());
   for (uint32_t i = 0; i < SIZE; i++) {
     trrb = transient_rrb_push(trrb, (void *) list[i]);
-    for (uint32_t j = 0; j < i; j++) {
+    for (uint32_t j = 0; j <= i; j++) {
       intptr_t val = (intptr_t) transient_rrb_nth(trrb, j);
       if (val != list[j]) {
         printf("Expected val at pos %d to be %ld, was %ld.\n", j, list[j], val);
