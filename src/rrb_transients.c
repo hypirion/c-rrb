@@ -166,10 +166,12 @@ TransientRRB* rrb_to_transient(const RRB *rrb) {
 }
 
 void* transient_rrb_nth(const TransientRRB *trrb, uint32_t index) {
+  check_transience(trrb);
   return rrb_nth((const RRB *) trrb, index);
 }
 
 void* transient_rrb_peek(const TransientRRB *trrb) {
+  check_transience(trrb);
   return transient_rrb_nth(trrb, trrb->cnt - 1);
 }
 
@@ -184,6 +186,7 @@ static IF_TAIL(InternalNode**, void**)
                     const void *guid);
 
 TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restrict elt) {
+  check_transience(trrb);
 #ifdef RRB_TAIL
   if (trrb->tail_len < RRB_BRANCHING) {
     trrb->tail->child[trrb->tail_len] = elt;
