@@ -27,7 +27,7 @@
 #include "rrb.h"
 #include "test.h"
 
-#define SIZE 400000
+#define SIZE 13000
 
 int main(int argc, char *argv[]) {
   GC_INIT();
