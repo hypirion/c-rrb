@@ -69,6 +69,7 @@ typedef struct _TransientRRB TransientRRB;
 TransientRRB* rrb_to_transient(const RRB *rrb);
 const RRB* transient_to_rrb(TransientRRB *trrb);
 
+uint32_t transient_rrb_count(const TransientRRB *trrb);
 void* transient_rrb_nth(const TransientRRB *trrb, uint32_t index);
 TransientRRB* transient_rrb_pop(TransientRRB *trrb);
 void* transient_rrb_peek(const TransientRRB *trrb);

@@ -171,9 +171,16 @@ const RRB* transient_to_rrb(TransientRRB *trrb) {
   // reshrink tail
   // In case of optimisation where tail len is not modified, we have to handle
   // it here first.
+#ifdef RRB_TAIL
   trrb->tail = leaf_node_clone(trrb->tail);
+#endif
   RRB* rrb = rrb_head_clone((const RRB *) trrb);
   return rrb;
+}
+
+uint32_t transient_rrb_count(const TransientRRB *trrb) {
+  check_transience(trrb);
+  return rrb_count((const RRB *) trrb);
 }
 
 void* transient_rrb_nth(const TransientRRB *trrb, uint32_t index) {
