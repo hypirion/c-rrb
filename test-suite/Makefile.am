@@ -31,3 +31,7 @@ test_catslice_SOURCES = test_catslice.c test.h
 check_PROGRAMS += test_fibocat
 TESTS += test_fibocat
 test_fibocat_SOURCES = test_fibocat.c test.h
+
+check_PROGRAMS += test_transient_push
+TESTS += test_transient_push
+test_transient_push_SOURCES = test_transient_push.c test.h
