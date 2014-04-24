@@ -53,7 +53,7 @@
 #ifdef TRANSIENTS
 // Abusing allocated pointers being unique to create GUIDs: using a single
 // malloc to create a guid.
-#define GUID_DECLARATION void *guid;
+#define GUID_DECLARATION const void *guid;
 #else
 #define GUID_DECLARATION
 #endif
@@ -99,7 +99,7 @@ struct _RRB {
 
 // perhaps point to an empty leaf to remove edge cases?
 #ifdef RRB_TAIL
-static const LeafNode EMPTY_LEAF = {.type = LEAF_NODE, .len = 0};
+static LeafNode EMPTY_LEAF = {.type = LEAF_NODE, .len = 0};
 static const RRB EMPTY_RRB = {.cnt = 0, .shift = 0, .root = NULL,
                               .tail_len = 0, .tail = &EMPTY_LEAF};
 #else
@@ -1044,6 +1044,8 @@ const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
   return rrb_concat(rrb, right);
 }
 #endif
+
+#undef TAIL_OPTIMISATION
 
 static uint32_t sized_pos(const InternalNode *node, uint32_t *index,
                           uint32_t sp) {
