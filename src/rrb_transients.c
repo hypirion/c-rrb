@@ -345,7 +345,7 @@ TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restri
         ((const InternalNode *) old_root)->size_table != NULL) {
       RRBSizeTable *table = transient_size_table_create();
       table->guid = trrb->guid;
-      table->size[0] = trrb->cnt - IF_TAIL(old_tail->len + 1, 1);
+      table->size[0] = trrb->cnt - IF_TAIL((old_tail->len + 1), 1);
       // If we insert the tail, the old size minus (new size minus one) the old
       // tail size will be the amount of elements in the left branch. If there
       // is no tail, the size is just the old rrb-tree.
