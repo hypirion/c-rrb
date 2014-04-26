@@ -143,11 +143,11 @@ static InternalNode* internal_node_copy(InternalNode *original, uint32_t start,
 static InternalNode* internal_node_new_above1(InternalNode *child);
 static InternalNode* internal_node_new_above(InternalNode *left, InternalNode *right);
 
-static const RRB* slice_right(const RRB *rrb, const uint32_t right);
+static RRB* slice_right(const RRB *rrb, const uint32_t right);
 static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
                                   uint32_t right, uint32_t shift,
                                   char has_left);
-static const RRB* slice_left(const RRB *rrb, uint32_t left);
+static const RRB* slice_left(RRB *rrb, uint32_t left);
 static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
                                 uint32_t left, uint32_t shift,
                                 char has_right);
@@ -1162,7 +1162,7 @@ static void promote_rightmost_leaf(RRB *new_rrb) {
 }
 #endif
 
-static const RRB* slice_right(const RRB *rrb, const uint32_t right) {
+static RRB* slice_right(const RRB *rrb, const uint32_t right) {
   if (right == 0) {
     return rrb_create();
   }
@@ -1196,7 +1196,7 @@ static const RRB* slice_right(const RRB *rrb, const uint32_t right) {
     return new_rrb;
   }
   else {
-    return rrb;
+    return (RRB *) rrb;
   }
 }
 
@@ -1295,7 +1295,7 @@ static TreeNode* slice_right_rec(uint32_t *total_shift, const TreeNode *root,
   }
 }
 
-const RRB* slice_left(const RRB *rrb, uint32_t left) {
+const RRB* slice_left(RRB *rrb, uint32_t left) {
   if (left >= rrb->cnt) {
     return rrb_create();
   }
@@ -1337,56 +1337,57 @@ const RRB* slice_left(const RRB *rrb, uint32_t left) {
 #ifdef RRB_TAIL
     new_rrb->tail = rrb->tail;
     new_rrb->tail_len = rrb->tail_len;
-
-    // TODO: I think the code below also applies to root nodes where size_table
-    // == NULL and (cnt - tail_len) & 0xff != 0, but it may be that this is
-    // resolved by slice_right itself. Perhaps not promote in the right slicing,
-    // but here instead?
-
-    // This case handles leaf nodes < RRB_BRANCHING size, by redistributing
-    // values from the tail into the actual leaf node.
-    if (RRB_SHIFT(new_rrb) == 0 && new_rrb->root != NULL) {
-      // two cases to handle: cnt <= RRB_BRANCHING
-      //     and (cnt - tail_len) < RRB_BRANCHING
-
-      if (new_rrb->cnt <= RRB_BRANCHING) {
-        // can put all into a new tail
-        LeafNode *new_tail = leaf_node_create(new_rrb->cnt);
-
-        memcpy(&new_tail->child[0], &((LeafNode *) new_rrb->root)->child[0],
-               new_rrb->root->len * sizeof(void *));
-        memcpy(&new_tail->child[new_rrb->root->len], &new_rrb->tail->child[0],
-               new_rrb->tail_len * sizeof(void *));
-        new_rrb->tail_len = new_rrb->cnt;
-        new_rrb->root = NULL;
-        new_rrb->tail = new_tail;
-      }
-      // no need for <= here, because if the root node is == rrb_branching, the
-      // invariant is kept.
-      else if (new_rrb->cnt - new_rrb->tail_len < RRB_BRANCHING) {
-        // create both a new tail and a new root node
-        const uint32_t tail_cut = RRB_BRANCHING - new_rrb->root->len;
-        LeafNode *new_root = leaf_node_create(RRB_BRANCHING);
-        LeafNode *new_tail = leaf_node_create(new_rrb->tail_len - tail_cut);
-
-        memcpy(&new_root->child[0], &((LeafNode *) new_rrb->root)->child[0],
-               new_rrb->root->len * sizeof(void *));
-        memcpy(&new_root->child[new_rrb->root->len], &new_rrb->tail->child[0],
-               tail_cut * sizeof(void *));
-        memcpy(&new_tail->child[0], &new_rrb->tail->child[tail_cut],
-               (new_rrb->tail_len - tail_cut) * sizeof(void *));
-
-        new_rrb->tail_len = new_rrb->tail_len - tail_cut;
-        new_rrb->tail = new_tail;
-        new_rrb->root = (TreeNode *) new_root;
-      }
-    }
 #endif
-    return new_rrb;
+    rrb = new_rrb;
   }
-  else { // if (left == 0)
-    return rrb;
+
+#ifdef RRB_TAIL
+
+  // TODO: I think the code below also applies to root nodes where size_table
+  // == NULL and (cnt - tail_len) & 0xff != 0, but it may be that this is
+  // resolved by slice_right itself. Perhaps not promote in the right slicing,
+  // but here instead?
+
+  // This case handles leaf nodes < RRB_BRANCHING size, by redistributing
+  // values from the tail into the actual leaf node.
+  if (RRB_SHIFT(rrb) == 0 && rrb->root != NULL) {
+    // two cases to handle: cnt <= RRB_BRANCHING
+    //     and (cnt - tail_len) < RRB_BRANCHING
+
+    if (rrb->cnt <= RRB_BRANCHING) {
+      // can put all into a new tail
+      LeafNode *new_tail = leaf_node_create(rrb->cnt);
+
+      memcpy(&new_tail->child[0], &((LeafNode *) rrb->root)->child[0],
+             rrb->root->len * sizeof(void *));
+      memcpy(&new_tail->child[rrb->root->len], &rrb->tail->child[0],
+             rrb->tail_len * sizeof(void *));
+      rrb->tail_len = rrb->cnt;
+      rrb->root = NULL;
+      rrb->tail = new_tail;
+    }
+    // no need for <= here, because if the root node is == rrb_branching, the
+    // invariant is kept.
+    else if (rrb->cnt - rrb->tail_len < RRB_BRANCHING) {
+      // create both a new tail and a new root node
+      const uint32_t tail_cut = RRB_BRANCHING - rrb->root->len;
+      LeafNode *new_root = leaf_node_create(RRB_BRANCHING);
+      LeafNode *new_tail = leaf_node_create(rrb->tail_len - tail_cut);
+
+      memcpy(&new_root->child[0], &((LeafNode *) rrb->root)->child[0],
+             rrb->root->len * sizeof(void *));
+      memcpy(&new_root->child[rrb->root->len], &rrb->tail->child[0],
+             tail_cut * sizeof(void *));
+      memcpy(&new_tail->child[0], &rrb->tail->child[tail_cut],
+             (rrb->tail_len - tail_cut) * sizeof(void *));
+
+      rrb->tail_len = rrb->tail_len - tail_cut;
+      rrb->tail = new_tail;
+      rrb->root = (TreeNode *) new_root;
+    }
   }
+#endif
+  return rrb;
 }
 
 static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
