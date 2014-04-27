@@ -21,46 +21,35 @@
  *
  */
 
+#include <gc/gc.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include "rrb.h"
+#include "test.h"
 
-void randomize_rand(void);
-void print_rrb(const RRB *rrb);
-void setup_rand(const char *str_seed);
+#define SIZE 13000
 
-#ifdef RRB_DEBUG
-#define CHECK_TREE(t) (validate_rrb(t))
-#else
-#define CHECK_TREE(t) (0)
+int main(int argc, char *argv[]) {
+  GC_INIT();
+  setup_rand(argc == 2 ? argv[1] : NULL);
+
+  int fail = 0;
+#ifdef TRANSIENTS
+  intptr_t *list = GC_MALLOC_ATOMIC(sizeof(intptr_t) * SIZE);
+  for (uint32_t i = 0; i < SIZE; i++) {
+    list[i] = (intptr_t) rand();
+  }
+  TransientRRB *trrb = rrb_to_transient(rrb_create());
+  for (uint32_t i = 0; i < SIZE; i++) {
+    trrb = transient_rrb_push(trrb, (void *) list[i]);
+    for (uint32_t j = 0; j <= i; j++) {
+      intptr_t val = (intptr_t) transient_rrb_nth(trrb, j);
+      if (val != list[j]) {
+        printf("Expected val at pos %d to be %ld, was %ld.\n", j, list[j], val);
+        fail = 1;
+      }
+    }
+  }
 #endif
-
-void setup_rand(const char *str_seed) {
-  if (str_seed == NULL) {
-    randomize_rand();
-  } else {
-    unsigned int seed = (unsigned int) atol(str_seed);
-    printf("Seed for this run: %u\n", seed);
-    fflush(stdout);
-    srand(seed);
-  }
-}
-
-void randomize_rand() {
-  time_t timestamp = time(NULL);
-  printf("Seed for this run: %u\n", (unsigned int) timestamp);
-  srand((unsigned int) timestamp);
-}
-
-void print_rrb(const RRB *rrb) {
-  uint32_t count = rrb_count(rrb);
-  printf("[");
-  char sep = 0;
-  for (uint32_t i = 0; i < count; i++) {
-    intptr_t val = (intptr_t) rrb_nth(rrb, i);
-    printf("%s%ld", sep ? ", " : "", val);
-    sep = 1;
-  }
-  printf("]\n");
+  return fail;
 }

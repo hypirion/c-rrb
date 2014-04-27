@@ -21,46 +21,14 @@
  *
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include "rrb.h"
+#ifndef RRB_THREAD_H
+#define RRB_THREAD_H
 
-void randomize_rand(void);
-void print_rrb(const RRB *rrb);
-void setup_rand(const char *str_seed);
+#include <pthread.h>
 
-#ifdef RRB_DEBUG
-#define CHECK_TREE(t) (validate_rrb(t))
-#else
-#define CHECK_TREE(t) (0)
+typedef pthread_t RRBThread;
+
+#define RRB_THREAD_ID pthread_self
+#define RRB_THREAD_EQUALS(a, b) pthread_equal(a, b)
+
 #endif
-
-void setup_rand(const char *str_seed) {
-  if (str_seed == NULL) {
-    randomize_rand();
-  } else {
-    unsigned int seed = (unsigned int) atol(str_seed);
-    printf("Seed for this run: %u\n", seed);
-    fflush(stdout);
-    srand(seed);
-  }
-}
-
-void randomize_rand() {
-  time_t timestamp = time(NULL);
-  printf("Seed for this run: %u\n", (unsigned int) timestamp);
-  srand((unsigned int) timestamp);
-}
-
-void print_rrb(const RRB *rrb) {
-  uint32_t count = rrb_count(rrb);
-  printf("[");
-  char sep = 0;
-  for (uint32_t i = 0; i < count; i++) {
-    intptr_t val = (intptr_t) rrb_nth(rrb, i);
-    printf("%s%ld", sep ? ", " : "", val);
-    sep = 1;
-  }
-  printf("]\n");
-}
