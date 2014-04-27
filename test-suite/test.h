@@ -42,6 +42,7 @@ void setup_rand(const char *str_seed) {
   } else {
     unsigned int seed = (unsigned int) atol(str_seed);
     printf("Seed for this run: %u\n", seed);
+    fflush(stdout);
     srand(seed);
   }
 }
