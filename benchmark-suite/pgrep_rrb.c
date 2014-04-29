@@ -27,6 +27,10 @@
 #define _REENTRANT 1
 #endif
 
+#ifndef HAVE_CONFIG_H
+#error "I need config.h. to determine whether to use transients or not."
+#endif
+
 #include <gc/gc.h>
 
 #include <stdio.h>
@@ -265,6 +269,25 @@ static void* split_to_lines(void *void_input) {
     to = file_size;
   }
 
+#ifdef TRANSIENTS
+  // find the lines
+  TransientRRB *tlines = rrb_to_transient(rrb_create());
+
+  // rewind to start of line
+  uint32_t line_start = from;
+  while (0 < line_start && lsa->buffer[line_start] != '\n') {
+    line_start--;
+  }
+  // find and collect lines
+  for (uint32_t i = from; i < to; i++) {
+    if (buffer[i] == '\n') {
+      Interval interval = {.from = line_start, .to = i};
+      tlines = transient_rrb_push(tlines, (void *) interval_to_uint64_t(interval));
+      line_start = i + 1;
+    }
+  }
+  const RRB *lines = transient_to_rrb(tlines);
+#else
   // find the lines
   const RRB *lines = rrb_create();
 
@@ -281,6 +304,7 @@ static void* split_to_lines(void *void_input) {
       line_start = i + 1;
     }
   }
+#endif
 
   intervals[own_tid] = lines;
   return 0;
@@ -304,6 +328,18 @@ static void* filter_by_term(void *void_input) {
   }
 
   // find all lines containing the search term
+#ifdef TRANSIENTS
+  TransientRRB *tcontained_lines = rrb_to_transient(rrb_create());
+
+  for (uint32_t line_idx = from; line_idx < to; line_idx++) {
+    Interval line = uint64_t_to_interval((uint64_t) rrb_nth(lines, line_idx));
+    if (substr_contains(&buffer[line.from], line.to - line.from, search_term)) {
+      tcontained_lines = rrb_push(tcontained_lines, (void *) interval_to_uint64_t(line));
+    }
+  }
+
+  const RRB *contained_lines = transient_to_rrb(tcontained_lines);
+#else
   const RRB *contained_lines = rrb_create();
 
   for (uint32_t line_idx = from; line_idx < to; line_idx++) {
@@ -312,6 +348,7 @@ static void* filter_by_term(void *void_input) {
       contained_lines = rrb_push(contained_lines, (void *) interval_to_uint64_t(line));
     }
   }
+#endif
 
   intervals[own_tid] = contained_lines;
   return 0;
