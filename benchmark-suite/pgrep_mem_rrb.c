@@ -74,6 +74,10 @@ static void* concatenate_rrbs(void *void_input);
 
 int main(int argc, char *argv[]) {
   GC_INIT();
+#ifndef RRB_DEBUG
+  fprintf(stderr, "Cannot run memory usage without rrb debugging on\n");
+  exit(1);
+#else
   // CLI argument parsing
   if (argc != 4) {
     fprintf(stderr, "Expected 3 arguments, got %d\nExiting...\n", argc - 1);
@@ -231,9 +235,10 @@ int main(int argc, char *argv[]) {
     free(max_concat_size);
     exit(0);
   }
-
+#endif
 }
 
+#ifdef RRB_DEBUG
 static void* split_to_lines(void *void_input) {
   LineSplitArgs *lsa = (LineSplitArgs *) void_input;
   const char *buffer = lsa->buffer;
@@ -336,3 +341,4 @@ static void* concatenate_rrbs(void* void_input) {
   pthread_barrier_destroy(&barriers[own_tid]);
   return 0;
 }
+#endif
