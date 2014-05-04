@@ -65,9 +65,33 @@ AM_CONDITIONAL([TRANSIENTS], [test x$transients = xtrue])
 
 if test x$transients = xtrue; then
    AC_DEFINE([TRANSIENTS])
-   AC_CHECK_LIB([pthread], [pthread_self], [THREADLIB=-pthread],
-             AC_MSG_ERROR([Needs pthread installed for transients.]))
-   AC_SUBST([THREADLIB])
+fi
+
+dnl Transients checking whether they're called from their creation thread
+
+dnl note: Will only activate IFF transients are active
+
+AH_TEMPLATE([TRANSIENTS_CHECK_THREAD],
+        [Ensure transients are called from only one thread.])
+
+AC_ARG_ENABLE([transients-check-thread],
+[  --disable-transients-check-thread    Disable transient thread checking],
+[case "${enableval}" in
+  yes) transients_check_thread=true ;;
+  no)  transients_check_thread=false ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-transients-check-thread]) ;;
+esac],[transients_check_thread=true=true])
+
+AM_CONDITIONAL([TRANSIENTS_CHECK_THREAD],
+               [test x$transients_check_thread = xtrue])
+
+if test x$transients = xtrue; then
+  if test x$transients_check_thread = xtrue; then
+    AC_DEFINE([TRANSIENTS_CHECK_THREAD])
+    AC_CHECK_LIB([pthread], [pthread_self], [THREADLIB=-pthread],
+               AC_MSG_ERROR([Needs pthread installed for transients.]))
+     AC_SUBST([THREADLIB])
+   fi
 fi
 
 dnl Direct append
