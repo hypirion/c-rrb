@@ -17,6 +17,19 @@ else
     BRANCHING=5
 fi
 
+function run_with {
+    local f="$1" # flags
+    echo ./configure $f
+    ./configure $f
+    make clean
+    make check
+    if [ $? -ne 0 ]; then
+        echo "Test run failed with following setup:"
+        echo "CC='$CC' CFLAGS='$CFLAGS' ./configure $f && make clean && make check"
+        exit $?
+    fi
+}
+
 for b in $BRANCHING; do 
     for (( i=0; i < OPT_PERMS; i++ )); do
         FLAGS="--with-branching=$b"
@@ -28,14 +41,10 @@ for b in $BRANCHING; do
             fi
             FLAGS="$FLAGS --$ENABLE_PRE-${OPTIONS[$j]}"
         done
-        echo ./configure $FLAGS
-        ./configure $FLAGS
-        make clean
-        make check
-        if [ $? -ne 0 ]; then
-            echo "Test run failed with following setup:"
-            echo "CC='$CC' CFLAGS='$CFLAGS' ./configure $FLAGS && make clean && make check"
-            exit $?
+        ## If transients enabled, also check with disabled thread ownership
+        if [ $(( (i >> 3) & 1)) -eq 1 ]; then
+            run_with "$FLAGS --disable-transients-check-thread"
         fi
+        run_with "$FLAGS"
     done
 done
