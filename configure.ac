@@ -40,6 +40,7 @@ AC_ARG_WITH([branching],
         [RRB_BITS=$withval],
         [RRB_BITS=5])
 
+dnl Calculate max height of the rrb tree
 [RRB_MAX_HEIGHT=1
 RRB_MAX_HEIGHT_BITS=$RRB_BITS
 while  [ "$RRB_MAX_HEIGHT_BITS" -lt 32 ]
@@ -107,8 +108,6 @@ AC_ARG_ENABLE([direct-append],
   *) AC_MSG_ERROR([bad value ${enableval} for --disable-direct-append]) ;;
 esac],[direct_append=true])
 
-AM_CONDITIONAL([DIRECT_APPEND], [test x$direct_append = xtrue])
-
 if test x$direct_append = xtrue; then
    AC_DEFINE([DIRECT_APPEND])
 fi
@@ -155,7 +154,6 @@ esac],[rrb_tail=true])
 if test x$rrb_tail = xtrue; then
    AC_DEFINE([RRB_TAIL])
 fi
-
 
 AC_DEFINE_UNQUOTED([RRB_BITS], [$RRB_BITS],
                                [The amount of bits used for a single node.])
