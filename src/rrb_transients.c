@@ -23,7 +23,9 @@
 
 #ifdef TRANSIENTS
 
+#ifdef TRANSIENTS_CHECK_THREAD
 #include "rrb_thread.h"
+#endif
 
 struct _TransientRRB {
   uint32_t cnt;
@@ -33,7 +35,9 @@ struct _TransientRRB {
   LeafNode *tail;
 #endif
   TreeNode *root;
+#ifdef TRANSIENTS_CHECK_THREAD
   RRBThread owner;
+#endif
   GUID_DECLARATION
 };
 
@@ -63,7 +67,9 @@ static const void* rrb_guid_create() {
 static TransientRRB* transient_rrb_head_create(const RRB* rrb) {
   TransientRRB *trrb = RRB_MALLOC(sizeof(TransientRRB));
   memcpy(trrb, rrb, sizeof(RRB));
+#ifdef TRANSIENTS_CHECK_THREAD
   trrb->owner = RRB_THREAD_ID();
+#endif
   return trrb;
 }
 
@@ -72,10 +78,12 @@ static void check_transience(const TransientRRB *trrb) {
     // Transient used after transient_to_persistent call
     exit(1);
   }
+#ifdef TRANSIENTS_CHECK_THREAD
   if (!RRB_THREAD_EQUALS(trrb->owner, RRB_THREAD_ID())) {
     // Transient used by non-owner thread
     exit(1);
   }
+#endif
 }
 
 static InternalNode* transient_internal_node_create() {
