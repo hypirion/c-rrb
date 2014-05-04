@@ -40,6 +40,7 @@ AC_ARG_WITH([branching],
         [RRB_BITS=$withval],
         [RRB_BITS=5])
 
+dnl Calculate max height of the rrb tree
 [RRB_MAX_HEIGHT=1
 RRB_MAX_HEIGHT_BITS=$RRB_BITS
 while  [ "$RRB_MAX_HEIGHT_BITS" -lt 32 ]
@@ -65,9 +66,33 @@ AM_CONDITIONAL([TRANSIENTS], [test x$transients = xtrue])
 
 if test x$transients = xtrue; then
    AC_DEFINE([TRANSIENTS])
-   AC_CHECK_LIB([pthread], [pthread_self], [THREADLIB=-pthread],
-             AC_MSG_ERROR([Needs pthread installed for transients.]))
-   AC_SUBST([THREADLIB])
+fi
+
+dnl Transients checking whether they're called from their creation thread
+
+dnl note: Will only activate IFF transients are active
+
+AH_TEMPLATE([TRANSIENTS_CHECK_THREAD],
+        [Ensure transients are called from only one thread.])
+
+AC_ARG_ENABLE([transients-check-thread],
+[  --disable-transients-check-thread    Disable transient thread checking],
+[case "${enableval}" in
+  yes) transients_check_thread=true ;;
+  no)  transients_check_thread=false ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-transients-check-thread]) ;;
+esac],[transients_check_thread=true=true])
+
+AM_CONDITIONAL([TRANSIENTS_CHECK_THREAD],
+               [test x$transients_check_thread = xtrue])
+
+if test x$transients = xtrue; then
+  if test x$transients_check_thread = xtrue; then
+    AC_DEFINE([TRANSIENTS_CHECK_THREAD])
+    AC_CHECK_LIB([pthread], [pthread_self], [THREADLIB=-pthread],
+               AC_MSG_ERROR([Needs pthread installed for transients.]))
+     AC_SUBST([THREADLIB])
+   fi
 fi
 
 dnl Direct append
@@ -82,8 +107,6 @@ AC_ARG_ENABLE([direct-append],
   no)  direct_append=false ;;
   *) AC_MSG_ERROR([bad value ${enableval} for --disable-direct-append]) ;;
 esac],[direct_append=true])
-
-AM_CONDITIONAL([DIRECT_APPEND], [test x$direct_append = xtrue])
 
 if test x$direct_append = xtrue; then
    AC_DEFINE([DIRECT_APPEND])
@@ -131,7 +154,6 @@ esac],[rrb_tail=true])
 if test x$rrb_tail = xtrue; then
    AC_DEFINE([RRB_TAIL])
 fi
-
 
 AC_DEFINE_UNQUOTED([RRB_BITS], [$RRB_BITS],
                                [The amount of bits used for a single node.])
