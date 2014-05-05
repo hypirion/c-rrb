@@ -41,10 +41,6 @@ for b in $BRANCHING; do
             fi
             FLAGS="$FLAGS --$ENABLE_PRE-${OPTIONS[$j]}"
         done
-        ## If transients enabled, also check with disabled thread ownership
-        if [ $(( (i >> 3) & 1)) -eq 1 ]; then
-            run_with "$FLAGS --disable-transients-check-thread"
-        fi
         run_with "$FLAGS"
     done
 done
