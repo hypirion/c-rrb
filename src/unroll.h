@@ -24,7 +24,7 @@
 // Unroll hack:
 // To unroll a piece of code, define WANTED_ITERATIONS and LOOP_BODY(i).
 // Then include this file (unroll.h), and your deed is done.
-// Supports up to 32 iterations.
+// Supports up to 32 iterations, which is the maximal amount we need to support.
 
 #ifndef ITERATION
 #	define ITERATION 0

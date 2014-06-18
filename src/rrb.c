@@ -341,7 +341,6 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
                       false);
     return rebalance(left_internal, centre_node, NULL, left_shift, is_top);
   }
-  // If this can be compacted with the block above, we may gain speedups.
   else if (left_shift < right_shift) {
     InternalNode *right_internal = (InternalNode *) right_node;
     InternalNode *centre_node =
@@ -350,14 +349,13 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
                       DEC_SHIFT(right_shift),
                       false);
     return rebalance(NULL, centre_node, right_internal, right_shift, is_top);
-    // ^ memleak, centre node may be thrown away.
   }
   else { // we have same height
-
     if (left_shift == LEAF_NODE_SHIFT) { // We're dealing with leaf nodes
       LeafNode *left_leaf = (LeafNode *) left_node;
       LeafNode *right_leaf = (LeafNode *) right_node;
-      // TODO: Why don't we do this if we're not at the top? Shuffling perf?
+      // We don't do this if we're not at top, as we'd have to zip stuff above
+      // as well.
       if (is_top && (left_leaf->len + right_leaf->len) <= RRB_BRANCHING) {
         // Can put them in a single node
         LeafNode *merged = leaf_node_merge(left_leaf, right_leaf);
@@ -446,7 +444,6 @@ static InternalNode* internal_node_merge(InternalNode *left, InternalNode *centr
   uint32_t left_len = (left == NULL) ? 0 : left->len - 1;
   uint32_t centre_len = (centre == NULL) ? 0 : centre->len;
   uint32_t right_len = (right == NULL) ? 0 : right->len - 1;
-  // TODO: Above *may* have incorrect results, but seems correct.
 
   InternalNode *merged = internal_node_create(left_len + centre_len + right_len);
   if (left_len != 0) { // memcpy'ing zero elements from/to NULL is undefined.
@@ -547,7 +544,7 @@ static uint32_t* shuffle(InternalNode *all, uint32_t *top_len) {
     total_nodes += size;
   }
 
-  const uint32_t effective_slot = (total_nodes / RRB_BRANCHING) + 1;
+  const uint32_t effective_slot = ((total_nodes-1) / RRB_BRANCHING) + 1;
 
   uint32_t shuffled_len = all->len;
   for (; effective_slot + RRB_EXTRAS < shuffled_len; shuffled_len--) {
@@ -613,7 +610,6 @@ static InternalNode* copy_across(InternalNode *all, uint32_t *node_size,
           }
 
           if (new_size - fill_count >= gaa->len - offset) {
-            // issues here?
             memcpy(&ga->child[fill_count], &gaa->child[offset],
                    (gaa->len - offset) * sizeof(void *));
             fill_count += gaa->len - offset;
@@ -621,7 +617,6 @@ static InternalNode* copy_across(InternalNode *all, uint32_t *node_size,
             offset = 0;
           }
           else {
-            // issues here?
             memcpy(&ga->child[fill_count], &gaa->child[offset],
                    (new_size - fill_count) * sizeof(void *));
             offset += new_size - fill_count;
@@ -1083,12 +1078,14 @@ void* rrb_nth(const RRB *rrb, uint32_t index) {
 #include "decrement.h"
 #define WANTED_ITERATIONS DECREMENT
 #define REVERSE_I(i) (RRB_MAX_HEIGHT - i - 1)
-#define LOOP_BODY(i) case (RRB_BITS * REVERSE_I(i)):  \
-      if (current->size_table == NULL) { \
-        current = current->child[(index >> (RRB_BITS * REVERSE_I(i))) & RRB_MASK]; \
-      } \
-      else { \
-        current = sized(current, &index, RRB_BITS * REVERSE_I(i)); \
+#define LOOP_BODY(i) case (RRB_BITS * REVERSE_I(i)):                  \
+      if (current->size_table == NULL) {                              \
+        const uint32_t subidx = (index >> (RRB_BITS * REVERSE_I(i)))  \
+                                & RRB_MASK;                           \
+        current = current->child[subidx];                             \
+      }                                                               \
+      else {                                                          \
+        current = sized(current, &index, RRB_BITS * REVERSE_I(i));    \
       }
 #include "unroll.h"
 #undef DECREMENT
@@ -1316,11 +1313,6 @@ const RRB* slice_left(RRB *rrb, uint32_t left) {
     }
     // Otherwise, we don't really have to take the tail into consideration.
     // Good!
-
-    // TODO: We can in theory compress the slicing. Say we have one element left
-    // in the tree, and the tail has space for it. So if there's space for the
-    // remaining elements to reside within the tail, we can just transfer them
-    // there.
 #endif
     RRB *new_rrb = rrb_mutable_create();
     InternalNode *root = (InternalNode *)
@@ -1775,7 +1767,7 @@ static void leaf_node_to_dot(DotFile dot, const LeafNode *root) {
 }
 
 static uint32_t node_size(DotArray *set, const TreeNode *root) {
-  if (dot_array_contains(set, (const void *) root)) {
+  if (root == NULL || dot_array_contains(set, (const void *) root)) {
     return 0;
   }
   dot_array_add(set, (const void *) root);
@@ -1786,9 +1778,12 @@ static uint32_t node_size(DotArray *set, const TreeNode *root) {
   }
   case INTERNAL_NODE: {
     const InternalNode *internal = (const InternalNode *) root;
-    uint32_t node_bytes = sizeof(InternalNode)
-                        + (sizeof(struct InternalNode *) + sizeof(uint32_t))
-                                                             * internal->len;
+    uint32_t size_table_bytes = 0;
+    if (internal->size_table != NULL) {
+      size_table_bytes = sizeof(uint32_t) * internal->len;
+    }
+    uint32_t node_bytes = sizeof(InternalNode) + size_table_bytes
+                        + sizeof(struct InternalNode *) * internal->len;
     for (uint32_t i = 0; i < internal->len; i++) {
       node_bytes += node_size(set, (const TreeNode *) internal->child[i]);
     }
@@ -1926,6 +1921,9 @@ uint32_t rrb_memory_usage(const RRB *const *rrbs, uint32_t rrb_count) {
     if (!dot_array_contains(set, (const void *) rrbs[i])) {
       dot_array_add(set, (const void *) rrbs[i]);
       sum += sizeof(RRB) + node_size(set, rrbs[i]->root);
+#ifdef RRB_TAIL
+      sum += node_size(set, rrbs[i]->tail);
+#endif
     }
   }
   return sum;

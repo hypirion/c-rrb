@@ -75,6 +75,7 @@ TransientRRB* transient_rrb_pop(TransientRRB *trrb);
 void* transient_rrb_peek(const TransientRRB *trrb);
 TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restrict elt);
 TransientRRB* transient_rrb_update(TransientRRB *restrict trrb, uint32_t index, const void *restrict elt);
+TransientRRB* transient_rrb_slice(TransientRRB *trrb, uint32_t from, uint32_t to);
 
 #endif
 
