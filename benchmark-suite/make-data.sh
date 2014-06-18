@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 echo http://data.githubarchive.org/2013-01-{01..10}-{0..23}.json.gz \
-    | xargs -n 1 -P 32 wget -q -nc
+    | xargs -n 1 -P 32 wget -q -nc --retry-connrefused --tries=0
 
 for i in $(find . -name '*.json.gz'); do
     gunzip $i;
