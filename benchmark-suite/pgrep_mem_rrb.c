@@ -164,6 +164,7 @@ int main(int argc, char *argv[]) {
       ConcatArgs args = {.own_tid = i, .thread_count = thread_count,
                          .intervals = intervals, .barriers = barriers,
                          .max_concat_size = max_concat_size};
+      max_concat_size[i] = 1;
       ca[i] = args;
     }
 
@@ -200,16 +201,16 @@ int main(int argc, char *argv[]) {
     }
 
     // find total memory usage
-    uint32_t total_mem = rrb_memory_usage(intervals, thread_count);
+    // uint32_t total_mem = rrb_memory_usage(intervals, thread_count);
     
     // Concatenate work
     // Reuse concat args and barriers
-
     for (uint32_t i = 0; i < thread_count; i++) {
       pthread_barrier_init(&barriers[i], NULL, 2);
       ConcatArgs args = {.own_tid = i, .thread_count = thread_count,
                          .intervals = intervals, .barriers = barriers,
                          .max_concat_size = max_concat_size};
+      max_concat_size[i] = 0;
       ca[i] = args;
     }
 
@@ -225,10 +226,12 @@ int main(int argc, char *argv[]) {
     for (uint32_t i = 0; i < thread_count; i++) {
       maxcat = MAX(maxcat, max_concat_size[i]);
     }
+
+    rrb_to_dot_file(intervals[0], "res.dot");
     
     fprintf(stderr, "%d hits\n", rrb_count(intervals[0]));
 
-    printf("%d %d \"%s\"\n", total_mem, maxcat, search_term);
+    printf("%d \"%s\"\n", maxcat, search_term);
 
     free(barriers);
     free(buffer);
@@ -332,7 +335,9 @@ static void* concatenate_rrbs(void* void_input) {
     trees[1] = intervals[sync_tid];
     intervals[own_tid] = rrb_concat(intervals[own_tid], intervals[sync_tid]);
     trees[2] = intervals[own_tid];
-    *maxcat = MAX(*maxcat, rrb_memory_usage(trees, 3));
+    if (*maxcat != 1) {
+      *maxcat = MAX(*maxcat, rrb_memory_usage(trees, 3));
+    }
     sync_mask = sync_mask << 1;
   }
   pthread_barrier_wait(&barriers[own_tid]);
