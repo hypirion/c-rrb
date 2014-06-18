@@ -334,7 +334,7 @@ static void* filter_by_term(void *void_input) {
   for (uint32_t line_idx = from; line_idx < to; line_idx++) {
     Interval line = uint64_t_to_interval((uint64_t) rrb_nth(lines, line_idx));
     if (substr_contains(&buffer[line.from], line.to - line.from, search_term)) {
-      tcontained_lines = rrb_push(tcontained_lines, (void *) interval_to_uint64_t(line));
+      tcontained_lines = transient_rrb_push(tcontained_lines, (void *) interval_to_uint64_t(line));
     }
   }
 
