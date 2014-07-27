@@ -116,7 +116,7 @@ static InternalNode* concat_sub_tree(TreeNode *left_node, uint32_t left_shift,
 static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
                                InternalNode *right, uint32_t shift,
                                char is_top);
-static uint32_t* shuffle(InternalNode *all, uint32_t *top_len);
+static uint32_t* create_concat_plan(InternalNode *all, uint32_t *top_len);
 static InternalNode* copy_across(InternalNode *all, uint32_t *node_sizes,
                                  uint32_t slen, uint32_t shift);
 static uint32_t find_shift(TreeNode *node);
@@ -507,7 +507,7 @@ static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
   // top_len is children count of the internal node returned.
   uint32_t top_len; // populated through pointer manipulation.
 
-  uint32_t *node_count = shuffle(all, &top_len);
+  uint32_t *node_count = create_concat_plan(all, &top_len);
 
   InternalNode *new_all = copy_across(all, node_count, top_len, shift);
   if (top_len <= RRB_BRANCHING) {
@@ -528,13 +528,13 @@ static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
 }
 
 /**
- * Shuffle takes in the large concatenated internal node and a pointer to an
- * uint32_t, which will contain the reduced size of the rebalanced node. It
- * returns a plan as an array of uint32_t's, and modifies the input pointer to
- * contain the length of said array.
+ * create_concat_plan takes in the large concatenated internal node and a
+ * pointer to an uint32_t, which will contain the reduced size of the rebalanced
+ * node. It returns a plan as an array of uint32_t's, and modifies the input
+ * pointer to contain the length of said array.
  */
 
-static uint32_t* shuffle(InternalNode *all, uint32_t *top_len) {
+static uint32_t* create_concat_plan(InternalNode *all, uint32_t *top_len) {
   uint32_t *node_count = RRB_MALLOC_ATOMIC(all->len * sizeof(uint32_t));
 
   uint32_t total_nodes = 0;
@@ -544,11 +544,11 @@ static uint32_t* shuffle(InternalNode *all, uint32_t *top_len) {
     total_nodes += size;
   }
 
-  const uint32_t effective_slot = ((total_nodes-1) / RRB_BRANCHING) + 1;
+  const uint32_t optimal_slots = ((total_nodes-1) / RRB_BRANCHING) + 1;
 
   uint32_t shuffled_len = all->len;
-  for (; effective_slot + RRB_EXTRAS < shuffled_len; shuffled_len--) {
-    uint32_t i = 0;
+  uint32_t i = 0;
+  while (optimal_slots + RRB_EXTRAS < shuffled_len) {
 
     // Skip over all nodes satisfying the invariant.
     while (node_count[i] > RRB_BRANCHING - RRB_INVARIANT) {
@@ -565,10 +565,11 @@ static uint32_t* shuffle(InternalNode *all, uint32_t *top_len) {
     } while (remaining_nodes > 0);
 
     // Shuffle up remaining node sizes
-    while (i < shuffled_len - 1) {
-      node_count[i] = node_count[i+1]; // Could use memcpy here I guess
-      i++;
+    for (uint32_t j = i; j < shuffled_len - 1; j++) {
+      node_count[j] = node_count[j+1]; // Could use memmove here I guess
     }
+    shuffled_len--;
+    i--;
   }
 
   *top_len = shuffled_len;
