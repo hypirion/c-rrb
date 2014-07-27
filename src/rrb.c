@@ -1594,6 +1594,9 @@ const RRB* rrb_pop(const RRB *rrb) {
 #ifdef DIRECT_APPEND
 // Direct pop function -- more or less verbatim from A.3 in my thesis.
 const RRB* rrb_pop(const RRB *rrb) {
+  if (rrb->cnt == 1) {
+    return rrb_create();
+  }
   RRB* new_rrb = rrb_head_clone(rrb);
   new_rrb->cnt--;
 

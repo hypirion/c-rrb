@@ -60,6 +60,8 @@ static RRBSizeTable* ensure_size_table_editable(const RRBSizeTable *table,
 static InternalNode* ensure_internal_editable(InternalNode *internal, const void *guid);
 static LeafNode* ensure_leaf_editable(LeafNode *leaf, const void *guid);
 
+static void* transient_promote_rightmost_leaf(TransientRRB* trrb);
+
 static const void* rrb_guid_create() {
   return (const void *) RRB_MALLOC_ATOMIC(1);
 }
@@ -543,5 +545,141 @@ TransientRRB* transient_rrb_update(TransientRRB *restrict trrb, uint32_t index,
     return NULL;
   }
 }
+
+#ifdef RRB_TAIL
+TransientRRB* transient_rrb_pop(TransientRRB *trrb) {
+  check_transience(trrb);
+  if (trrb->cnt == 1) {
+    trrb->cnt = 0;
+    trrb->tail_len = 0;
+    trrb->tail->child[0] = NULL;
+    trrb->tail->len = 0;
+    return trrb;
+  }
+  trrb->cnt--;
+
+  if (trrb->tail_len == 1) {
+    transient_promote_rightmost_leaf(trrb);
+    return trrb;
+  }
+  else {
+    trrb->tail->child[trrb->tail_len - 1] = NULL;
+    trrb->tail_len--;
+    trrb->tail->len--;
+
+    return trrb;
+  }
+}
+#else
+TransientRRB* transient_rrb_pop(TransientRRB *trrb) {
+  check_transience(trrb);
+
+  const void *guid = trrb->guid;
+
+  InternalNode *path[RRB_MAX_HEIGHT+1];
+  path[0] = trrb->root;
+  uint32_t i = 0, shift = LEAF_NODE_SHIFT;
+
+  // populate path array
+  for (i = 0, shift = LEAF_NODE_SHIFT; shift < RRB_SHIFT(trrb);
+       i++, shift += RRB_BITS) {
+    path[i+1] = path[i]->child[path[i]->len-1];
+  }
+
+  const uint32_t height = i;
+  LeafNode *leaf = (LeafNode *) path[height];
+  if (leaf->len == 1) { // Leaf node contains only single element
+    path[height] = NULL;
+  }
+  else {
+    // Remove last element
+    leaf = ensure_leaf_editable(leaf, guid);
+    leaf->child[leaf->len-1] = NULL;
+    leaf->len--;
+    path[height] = (InternalNode *) leaf;
+  }
+
+  while (i --> 0) { // from i = i - 1 downto (and including) 0
+    if (path[i+1] == NULL && path[i]->len == 1) {
+        path[i] = NULL;
+    }
+    // optimisation here (lines 25-29 in thesis): Instead of cloning the root
+    // node all the time, we avoid cloning it if we know we will discard the
+    // cloned root (i.e. the height of the trie shrinks). Avoids a memory
+    // allocation.
+    else if (path[i+1] == NULL && i == 0 && path[0]->len == 2) {
+      path[i] = path[i]->child[0];
+      trrb->shift -= RRB_BITS;
+    }
+    else {
+      path[i] = ensure_internal_editable(path[i], guid);
+      path[i]->child[path[i]->len-1] = path[i+1];
+      if (path[i+1] == NULL) {
+        path[i]->len--;
+      }
+      if (path[i]->size_table != NULL) { // this is decrement-size-table*
+        // copy and decrement last slot in size table if it exists
+        path[i]->size_table = ensure_size_table_editable(path[i]->size_table,
+                                                         path[i]->len, guid);
+        path[i]->size_table->size[path[i]->len-1]--;
+      }
+    }
+  }
+
+  trrb->root = (TreeNode *) path[0];
+  return trrb;
+}
+#endif
+
+#ifdef RRB_TAIL
+void* transient_promote_rightmost_leaf(TransientRRB* trrb) {
+  const void* guid = trrb->guid;
+  InternalNode *current = (InternalNode *) trrb->root;
+
+  InternalNode *path[RRB_MAX_HEIGHT+1];
+  path[0] = trrb->root;
+  uint32_t i = 0, shift = LEAF_NODE_SHIFT;
+
+  // populate path array
+  for (i = 0, shift = LEAF_NODE_SHIFT; shift < RRB_SHIFT(trrb);
+       i++, shift += RRB_BITS) {
+    path[i+1] = path[i]->child[path[i]->len-1];
+  }
+
+  const uint32_t height = i;
+
+  // Set leaf node as tail.
+  trrb->tail = (LeafNode *) path[height];
+  trrb->tail_len = path[height]->len;
+  const uint32_t tail_len = trrb->tail_len;
+
+  path[height] = NULL;
+
+  while (i --> 0) {
+    if (path[i+1] == NULL && path[i]->len == 1) {
+        path[i] = NULL;
+    }
+    else if (path[i+1] == NULL && i == 0 && path[0]->len == 2) {
+      path[i] = path[i]->child[0];
+      trrb->shift -= RRB_BITS;
+    }
+    else {
+      path[i] = ensure_internal_editable(path[i], guid);
+      path[i]->child[path[i]->len-1] = path[i+1];
+      if (path[i+1] == NULL) {
+        path[i]->len--;
+      }
+      if (path[i]->size_table != NULL) { // this is decrement-size-table*
+        path[i]->size_table = ensure_size_table_editable(path[i]->size_table,
+                                                         path[i]->len, guid);
+        path[i]->size_table->size[path[i]->len-1] -= tail_len;
+      }
+    }
+  }
+
+  trrb->root = (TreeNode *) path[0];
+}
+#endif
+
 
 #endif
