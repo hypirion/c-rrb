@@ -198,7 +198,7 @@ void* transient_rrb_nth(const TransientRRB *trrb, uint32_t index) {
 
 void* transient_rrb_peek(const TransientRRB *trrb) {
   check_transience(trrb);
-  return transient_rrb_nth(trrb, trrb->cnt - 1);
+  return rrb_peek((const RRB *) trrb);
 }
 
 // rrb_push MUST use direct append techniques, otherwise it has to use

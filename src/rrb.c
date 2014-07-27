@@ -1106,7 +1106,27 @@ uint32_t rrb_count(const RRB *rrb) {
 }
 
 void* rrb_peek(const RRB *rrb) {
-  return rrb_nth(rrb, rrb->cnt - 1);
+#ifdef RRB_TAIL
+  return (void *) rrb->tail->child[rrb->tail_len-1];
+#else
+  // this is sorta direct peek
+  const InternalNode *current = (const InternalNode *) rrb->root;
+  switch (RRB_SHIFT(rrb)) {
+#define DECREMENT RRB_MAX_HEIGHT
+#include "decrement.h"
+#define WANTED_ITERATIONS DECREMENT
+#define REVERSE_I(i) (RRB_MAX_HEIGHT - i - 1)
+#define LOOP_BODY(i) case (RRB_BITS * REVERSE_I(i)):                  \
+    current = current->child[current->len-1];
+#include "unroll.h"
+#undef DECREMENT
+#undef REVERSE_I
+  case 0:
+    return ((const LeafNode *)current)->child[current->len-1];
+  default:
+    return NULL;
+  }
+#endif
 }
 
 #ifdef RRB_TAIL
