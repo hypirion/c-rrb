@@ -129,6 +129,7 @@ static const InternalNode* sized(const InternalNode *node, uint32_t *index,
 
 static LeafNode* leaf_node_clone(const LeafNode *original);
 static LeafNode* leaf_node_inc(const LeafNode *original);
+static LeafNode* leaf_node_dec(const LeafNode *original);
 static LeafNode* leaf_node_create(uint32_t size);
 static LeafNode* leaf_node_merge(LeafNode *left_leaf, LeafNode *right_leaf);
 
@@ -398,6 +399,14 @@ static LeafNode* leaf_node_inc(const LeafNode *original) {
   memcpy(inc, original, size);
   inc->len++;
   return inc;
+}
+
+static LeafNode* leaf_node_dec(const LeafNode *original) {
+  size_t size = sizeof(LeafNode) + (original->len - 1) * sizeof(void *);
+  LeafNode *dec = RRB_MALLOC(size); // assumes size > 1
+  memcpy(dec, original, size);
+  dec->len--;
+  return dec;
 }
 
 
@@ -1105,11 +1114,13 @@ void* rrb_peek(const RRB *rrb) {
  * Destructively replaces the rightmost leaf as the new tail, discarding the
  * old.
  */
+// Note that this is very similar to the direct pop algorithm, which is
+// described further down in this file.
 static void promote_rightmost_leaf(RRB *new_rrb) {
   // special case empty vector here?
 
   const InternalNode *current = (const InternalNode *) new_rrb->root;
-  InternalNode *path[RRB_MAX_HEIGHT];
+  InternalNode *path[RRB_MAX_HEIGHT+1];
   path[0] = new_rrb->root;
   uint32_t i = 0, shift = LEAF_NODE_SHIFT;
 
@@ -1120,11 +1131,14 @@ static void promote_rightmost_leaf(RRB *new_rrb) {
   }
 
   const uint32_t height = i;
+  // Set the leaf node as tail.
   new_rrb->tail = (LeafNode *) path[height];
   new_rrb->tail_len = path[height]->len;
   const uint32_t tail_len = new_rrb->tail_len;
 
+  // last element is now always null, in contrast to direct pop
   path[height] = NULL;
+
   while (i --> 0) {
     // TODO: First skip will always happen. Can we use that somehow?
     if (path[i+1] == NULL) {
@@ -1144,6 +1158,8 @@ static void promote_rightmost_leaf(RRB *new_rrb) {
       path[i]->child[path[i]->len-1] = path[i+1];
       if (path[i]->size_table != NULL) {
         path[i]->size_table = size_table_clone(path[i]->size_table, path[i]->len);
+        // this line differs, as we remove `tail_len` elements from the trie,
+        // instead of just 1 as in the direct pop algorithm.
         path[i]->size_table->size[path[i]->len-1] -= tail_len;
       }
     }
@@ -1533,6 +1549,93 @@ const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restr
     return NULL;
   }
 }
+
+#ifdef RRB_TAIL
+// Also assume direct append
+const RRB* rrb_pop(const RRB *rrb) {
+  if (rrb->cnt == 1) {
+    return rrb_create();
+  }
+  RRB* new_rrb = rrb_head_clone(rrb);
+  new_rrb->cnt--;
+
+  if (rrb->tail_len == 1) {
+    promote_rightmost_leaf(new_rrb);
+    return new_rrb;
+  }
+  else {
+    LeafNode *new_tail = leaf_node_dec(rrb->tail);
+    new_rrb->tail_len--;
+    new_rrb->tail = new_tail;
+    return new_rrb;
+  }
+}
+#else
+#ifdef DIRECT_APPEND
+// Direct pop function -- more or less verbatim from A.3 in my thesis.
+const RRB* rrb_pop(const RRB *rrb) {
+  RRB* new_rrb = rrb_head_clone(rrb);
+  new_rrb->cnt--;
+
+  InternalNode *path[RRB_MAX_HEIGHT+1];
+  path[0] = new_rrb->root;
+  uint32_t i = 0, shift = LEAF_NODE_SHIFT;
+
+  // populate path array
+  for (i = 0, shift = LEAF_NODE_SHIFT; shift < RRB_SHIFT(new_rrb);
+       i++, shift += RRB_BITS) {
+    path[i+1] = path[i]->child[path[i]->len-1];
+  }
+
+  const uint32_t height = i;
+  if (path[height]->len == 1) { // Leaf node contains only single element
+    path[height] = NULL;
+  }
+  else {
+    path[height] = (InternalNode *) leaf_node_dec((LeafNode *) path[height]);
+    // Remove last element
+  }
+
+  while (i --> 0) { // from i = i - 1 downto (and including) 0
+    if (path[i+1] == NULL) {
+      if (path[i]->len == 1) {
+        path[i] = NULL;
+      }
+      // optimisation here (lines 25-29 in thesis): Instead of cloning the root
+      // node all the time, we avoid cloning it if we know we will discard the
+      // cloned root (i.e. the height of the trie shrinks). Avoids a memory
+      // allocation.
+      else if (i == 0 && path[0]->len == 2) {
+        path[i] = path[i]->child[0];
+        new_rrb->shift -= RRB_BITS;
+      }
+      else {
+        // slightly different from the thesis here: If the node to copy is null,
+        // I shrink the array size. This cannot be done through cloning in C.
+        path[i] = internal_node_dec(path[i]);
+      }
+    }
+    else {
+      path[i] = internal_node_clone(path[i]);
+      path[i]->child[path[i]->len-1] = path[i+1];
+      if (path[i]->size_table != NULL) { // this is decrement-size-table*
+        // copy and decrement last slot in size table if it exists
+        path[i]->size_table = size_table_clone(path[i]->size_table, path[i]->len);
+        path[i]->size_table->size[path[i]->len-1]--;
+      }
+    }
+  }
+
+  new_rrb->root = (TreeNode *) path[0];
+  return new_rrb;
+}
+#else
+const RRB* rrb_pop(const RRB *rrb) {
+  return rrb_slice(rrb, 0, rrb->cnt-1);
+}
+#endif
+#endif
+
 
 #include "rrb_transients.c"
 

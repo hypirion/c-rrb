@@ -16,6 +16,10 @@ check_PROGRAMS += test_peek
 TESTS += test_peek
 test_peek_SOURCES = test_peek.c test.h
 
+check_PROGRAMS += test_pop
+TESTS += test_pop
+test_pop_SOURCES = test_pop.c test.h
+
 check_PROGRAMS += test_update
 TESTS += test_update
 test_update_SOURCES = test_update.c test.h
