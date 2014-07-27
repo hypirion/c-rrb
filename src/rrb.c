@@ -117,8 +117,8 @@ static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
                                InternalNode *right, uint32_t shift,
                                char is_top);
 static uint32_t* create_concat_plan(InternalNode *all, uint32_t *top_len);
-static InternalNode* copy_across(InternalNode *all, uint32_t *node_sizes,
-                                 uint32_t slen, uint32_t shift);
+static InternalNode* execute_concat_plan(InternalNode *all, uint32_t *node_sizes,
+                                         uint32_t slen, uint32_t shift);
 static uint32_t find_shift(TreeNode *node);
 static InternalNode* set_sizes(InternalNode *node, uint32_t shift);
 static uint32_t size_sub_trie(TreeNode *node, uint32_t parent_shift);
@@ -509,7 +509,7 @@ static InternalNode* rebalance(InternalNode *left, InternalNode *centre,
 
   uint32_t *node_count = create_concat_plan(all, &top_len);
 
-  InternalNode *new_all = copy_across(all, node_count, top_len, shift);
+  InternalNode *new_all = execute_concat_plan(all, node_count, top_len, shift);
   if (top_len <= RRB_BRANCHING) {
     if (is_top == false) {
       return internal_node_new_above1(set_sizes(new_all, shift));
@@ -576,98 +576,99 @@ static uint32_t* create_concat_plan(InternalNode *all, uint32_t *top_len) {
   return node_count;
 }
 
-static InternalNode* copy_across(InternalNode *all, uint32_t *node_size,
-                                 uint32_t slen, uint32_t shift) {
+static InternalNode* execute_concat_plan(InternalNode *all, uint32_t *node_size,
+                                         uint32_t slen, uint32_t shift) {
   // the all vector doesn't have sizes set yet.
 
   InternalNode *new_all = internal_node_create(slen);
+  // Current old node index to copy from
   uint32_t idx = 0;
 
-  if (shift == INC_SHIFT(LEAF_NODE_SHIFT)) {
-    uint32_t offset = 0;
+  // Offset is how long into the current old node we've already copied from
+  uint32_t offset = 0;
+
+  if (shift == INC_SHIFT(LEAF_NODE_SHIFT)) { // handle leaf nodes here
     for (uint32_t i = 0; i < slen; i++) {
       const uint32_t new_size = node_size[i];
-      LeafNode *leaf = (LeafNode *) all->child[idx];
+      LeafNode *old = (LeafNode *) all->child[idx];
 
-      if (offset == 0 && new_size == leaf->len) {
+      if (offset == 0 && new_size == old->len) {
+        // just pointer copy the node if there is no offset and both have same
+        // size
         idx++;
-        new_all->child[i] = (InternalNode *) leaf;
+        new_all->child[i] = (InternalNode *) old;
       }
       else {
-        uint32_t fill_count = 0;
+        LeafNode *new_node = leaf_node_create(new_size);
+        uint32_t cur_size = 0;
+        // cur_size is the current size of the new node
+        // (the amount of elements copied into it so far)
 
-        LeafNode *rta = NULL; // TODO: Rename
-        LeafNode *ga = NULL; // TODO: Rename
+        while (cur_size < new_size /*&& idx < all->len*/) {
+          // the commented out check is verified by create_concat_plan --
+          // otherwise the implementation is erroneous!
+          const LeafNode *old_node = (LeafNode *) all->child[idx];
 
-        while (fill_count < new_size && idx < all->len) {
-          const LeafNode *gaa = (LeafNode *) all->child[idx]; // TODO: Rename
-
-          if (fill_count == 0) {
-            ga = leaf_node_create(new_size);
-          }
-
-          if (new_size - fill_count >= gaa->len - offset) {
-            memcpy(&ga->child[fill_count], &gaa->child[offset],
-                   (gaa->len - offset) * sizeof(void *));
-            fill_count += gaa->len - offset;
+          if (new_size - cur_size >= old_node->len - offset) {
+            // if this node can contain all elements not copied in the old node,
+            // copy all of them into this node
+            memcpy(&new_node->child[cur_size], &old_node->child[offset],
+                   (old_node->len - offset) * sizeof(void *));
+            cur_size += old_node->len - offset;
             idx++;
             offset = 0;
           }
           else {
-            memcpy(&ga->child[fill_count], &gaa->child[offset],
-                   (new_size - fill_count) * sizeof(void *));
-            offset += new_size - fill_count;
-            fill_count = new_size;
+            // if this node can't contain all the elements not copied in the old
+            // node, copy as many as we can and pass the old node over to the
+            // new node after this one.
+            memcpy(&new_node->child[cur_size], &old_node->child[offset],
+                   (new_size - cur_size) * sizeof(void *));
+            offset += new_size - cur_size;
+            cur_size = new_size;
           }
-          rta = ga;
         }
 
-        new_all->child[i] = (InternalNode *) rta;
+        new_all->child[i] = (InternalNode *) new_node;
       }
     }
   }
   else { // not at lowest non-leaf level
-    uint32_t offset = 0;
+    // this is ALMOST equivalent with the leaf node copying, the only difference
+    // is that this is with internal nodes and the fact that they have to create
+    // their size tables.
+
+    // As that's the only difference, I won't bother with comments here.
     for (uint32_t i = 0; i < slen; i++) {
       const uint32_t new_size = node_size[i];
+      InternalNode *old = all->child[idx];
 
-      InternalNode *node = (InternalNode *) all->child[idx];
-
-      if (offset == 0 && new_size == node->len) {
+      if (offset == 0 && new_size == old->len) {
         idx++;
-        new_all->child[i] = node;
+        new_all->child[i] = old;
       }
       else {
-        uint32_t fill_count = 0;
+        InternalNode *new_node = internal_node_create(new_size);
+        uint32_t cur_size = 0;
+        while (cur_size < new_size) {
+          const InternalNode *old_node = all->child[idx];
 
-        InternalNode *rta = NULL; // TODO: rename
-        InternalNode *aa = NULL; // TODO: rename
-
-        while (fill_count < new_size && idx < all->len) {
-          const InternalNode *aaa = all->child[idx];
-
-          if (fill_count == 0) {
-            aa = internal_node_create(new_size);
-          }
-
-          if (new_size - fill_count > aaa->len - offset) {
-            memcpy(&aa->child[fill_count], &aaa->child[offset],
-                   (aaa->len - offset) * sizeof(InternalNode *));
+          if (new_size - cur_size >= old_node->len - offset) {
+            memcpy(&new_node->child[cur_size], &old_node->child[offset],
+                   (old_node->len - offset) * sizeof(InternalNode *));
+            cur_size += old_node->len - offset;
             idx++;
-            fill_count += aaa->len - offset;
             offset = 0;
           }
           else {
-            memcpy(&aa->child[fill_count], &aaa->child[offset],
-                   (new_size - fill_count) * sizeof(InternalNode *));
-            offset += new_size - fill_count;
-            fill_count = new_size;
+            memcpy(&new_node->child[cur_size], &old_node->child[offset],
+                   (new_size - cur_size) * sizeof(InternalNode *));
+            offset += new_size - cur_size;
+            cur_size = new_size;
           }
-          rta = aa;
         }
-
-        rta = set_sizes(rta, DEC_SHIFT(shift));
-        new_all->child[i] = rta;
+        set_sizes(new_node, DEC_SHIFT(shift)); // This is where we set sizes
+        new_all->child[i] = new_node;
       }
     }
   }
