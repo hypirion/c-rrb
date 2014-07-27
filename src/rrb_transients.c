@@ -96,7 +96,7 @@ static InternalNode* transient_internal_node_create() {
 
 static RRBSizeTable* transient_size_table_create() {
   // this atomic allocation is, strictly speaking, NOT ok. Small chance of guid
-  // being reallocated at same position if lost. Noted when porting over to
+  // being reallocated at same position if lost. Note when porting over to
   // different GC/Precise mode.
   RRBSizeTable *table = RRB_MALLOC_ATOMIC(sizeof(RRBSizeTable)
                                           + RRB_BRANCHING * sizeof(void *));
@@ -177,8 +177,8 @@ const RRB* transient_to_rrb(TransientRRB *trrb) {
   // Deny further modifications on the tree.
   trrb->guid = NULL;
   // reshrink tail
-  // In case of optimisation where tail len is not modified, we have to handle
-  // it here first.
+  // In case of optimisation where tail len is not modified (NOT yet tested!)
+  // we have to handle it here first.
 #ifdef RRB_TAIL
   trrb->tail = leaf_node_clone(trrb->tail);
 #endif

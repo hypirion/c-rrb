@@ -552,9 +552,6 @@ static uint32_t* shuffle(InternalNode *all, uint32_t *top_len) {
 
     // Skip over all nodes satisfying the invariant.
     while (node_count[i] > RRB_BRANCHING - RRB_INVARIANT) {
-      // TODO: Could this segfault? if all sizes > RRB_BRANCHING -
-      // RRB_INVARIANT? Don't think so, as for loop condition would be broken
-      // then. But verify this.
       i++;
     }
 
@@ -605,7 +602,6 @@ static InternalNode* copy_across(InternalNode *all, uint32_t *node_size,
           const LeafNode *gaa = (LeafNode *) all->child[idx]; // TODO: Rename
 
           if (fill_count == 0) {
-            // may leak here
             ga = leaf_node_create(new_size);
           }
 
@@ -927,13 +923,9 @@ static RRB* push_down_tail(const RRB *restrict rrb, RRB *restrict new_rrb,
   return new_rrb;
 }
 
-/**
- * Ramblings of a madman:
- *
- * - Height should be shift or height, not max element size
- * - copy_first_k returns a pointer to the next pointer to set
- * - append_empty now returns a pointer to the *void we're supposed to set
- **/
+// - Height should be shift or height, not max element size
+// - copy_first_k returns a pointer to the next pointer to set
+// - append_empty now returns a pointer to the *void we're supposed to set
 
 #ifdef RRB_TAIL
 static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k,
@@ -1016,7 +1008,7 @@ static IF_TAIL(InternalNode**, void**)
       new_empty->child[0] = empty;
       empty = new_empty;
     }
-    // Right, this root node must be one larger, otherwise segfault
+    // this root node must be one larger, otherwise segfault
     *to_set = empty;
     return &leaf->child[0];
   }
@@ -1434,7 +1426,7 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
       InternalNode *sliced_root = internal_node_create(sliced_len);
 
       // TODO: Can shrink size here if sliced_len == 2, using the ambidextrous
-      // vector technique. Takes effectively constant time.
+      // vector technique w. offset. Takes constant time.
 
       memcpy(&sliced_root->child[1], &internal_root->child[subidx + 1],
              (sliced_len - 1) * sizeof(InternalNode *));
@@ -1452,7 +1444,7 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
           // left is total amount sliced off. By adding in subidx, we get faster
           // computation later on.
           sliced_table->size[i] = (subidx + 1 + i) << shift;
-          // ISSUE: This doesn't really work properly for top root, as last node
+          // NOTE: This doesn't really work properly for top root, as last node
           // may have a higher count than it *actually* has. To remedy for this,
           // the top function performs a check afterwards, which may insert the
           // correct value if there's a size table in the root.
