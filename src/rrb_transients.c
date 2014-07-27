@@ -492,4 +492,56 @@ static IF_TAIL(InternalNode**, void**)
 #endif
 }
 
+// transient_rrb_update is effectively the same as rrb_update, but may mutate
+// nodes if it's safe to do so.
+TransientRRB* transient_rrb_update(TransientRRB *restrict trrb, uint32_t index,
+                                   const void *restrict elt) {
+  check_transience(trrb);
+  const void* guid = trrb->guid;
+  if (index < trrb->cnt) {
+#ifdef RRB_TAIL
+    const uint32_t tail_offset = trrb->cnt - trrb->tail_len;
+    if (tail_offset <= index) {
+      trrb->tail->child[index - tail_offset] = elt;
+      return trrb;
+    }
+#endif
+    InternalNode **previous_pointer = (InternalNode **) &trrb->root;
+    InternalNode *current = (InternalNode *) trrb->root;
+    LeafNode *leaf;
+    uint32_t child_index;
+    switch (RRB_SHIFT(trrb)) {
+#define DECREMENT RRB_MAX_HEIGHT
+#include "decrement.h"
+#define WANTED_ITERATIONS DECREMENT
+#define REVERSE_I(i) (RRB_MAX_HEIGHT - i - 1)
+#define LOOP_BODY(i) case (RRB_BITS * REVERSE_I(i)):  \
+      current = ensure_internal_editable(current, guid);  \
+      *previous_pointer = current; \
+      if (current->size_table == NULL) { \
+        child_index = (index >> (RRB_BITS * REVERSE_I(i))) & RRB_MASK; \
+      } \
+      else { \
+        child_index = sized_pos(current, &index, RRB_BITS * REVERSE_I(i)); \
+      } \
+      previous_pointer = &current->child[child_index]; \
+      current = current->child[child_index];
+#include "unroll.h"
+#undef DECREMENT
+#undef REVERSE_I
+    case 0:
+      leaf = (LeafNode *) current;
+      leaf = ensure_leaf_editable(leaf, guid);
+      *previous_pointer = (InternalNode *) leaf;
+      leaf->child[index & RRB_MASK] = elt;
+      return trrb;
+    default:
+      return NULL;
+    }
+  }
+  else {
+    return NULL;
+  }
+}
+
 #endif
