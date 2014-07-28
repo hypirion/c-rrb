@@ -495,7 +495,8 @@ static IF_TAIL(InternalNode**, void**)
 }
 
 // transient_rrb_update is effectively the same as rrb_update, but may mutate
-// nodes if it's safe to do so.
+// nodes if it's safe to do so (replacing clone calls with ensure_editable
+// calls)
 TransientRRB* transient_rrb_update(TransientRRB *restrict trrb, uint32_t index,
                                    const void *restrict elt) {
   check_transience(trrb);
@@ -681,5 +682,12 @@ void* transient_promote_rightmost_leaf(TransientRRB* trrb) {
 }
 #endif
 
-
+// TODO: more efficient slicing algorithm for transients. Should in theory just
+// require some size table magic and converting cloning over to ensure_editable.
+TransientRRB* transient_rrb_slice(TransientRRB *trrb, uint32_t from, uint32_t to) {
+  check_transience(trrb);
+  const RRB* rrb = rrb_slice((const RRB*) trrb, from, to);
+  memcpy(trrb, rrb, sizeof(RRB));
+  return trrb;
+}
 #endif
