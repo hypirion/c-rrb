@@ -21,23 +21,15 @@
  *
  */
 
-#ifdef TRANSIENTS
-
-#ifdef TRANSIENTS_CHECK_THREAD
 #include "rrb_thread.h"
-#endif
 
 struct _TransientRRB {
   uint32_t cnt;
   uint32_t shift;
-#ifdef RRB_TAIL
   uint32_t tail_len;
   LeafNode *tail;
-#endif
   TreeNode *root;
-#ifdef TRANSIENTS_CHECK_THREAD
   RRBThread owner;
-#endif
   GUID_DECLARATION
 };
 
@@ -69,9 +61,7 @@ static const void* rrb_guid_create() {
 static TransientRRB* transient_rrb_head_create(const RRB* rrb) {
   TransientRRB *trrb = RRB_MALLOC(sizeof(TransientRRB));
   memcpy(trrb, rrb, sizeof(RRB));
-#ifdef TRANSIENTS_CHECK_THREAD
   trrb->owner = RRB_THREAD_ID();
-#endif
   return trrb;
 }
 
@@ -80,12 +70,10 @@ static void check_transience(const TransientRRB *trrb) {
     // Transient used after transient_to_persistent call
     exit(1);
   }
-#ifdef TRANSIENTS_CHECK_THREAD
   if (!RRB_THREAD_EQUALS(trrb->owner, RRB_THREAD_ID())) {
     // Transient used by non-owner thread
     exit(1);
   }
-#endif
 }
 
 static InternalNode* transient_internal_node_create() {
@@ -169,9 +157,7 @@ TransientRRB* rrb_to_transient(const RRB *rrb) {
   TransientRRB* trrb = transient_rrb_head_create(rrb);
   const void *guid = rrb_guid_create();
   trrb->guid = guid;
-#ifdef RRB_TAIL
   trrb->tail = transient_leaf_node_clone(rrb->tail, guid);
-#endif
   return trrb;
 }
 
@@ -181,9 +167,7 @@ const RRB* transient_to_rrb(TransientRRB *trrb) {
   // reshrink tail
   // In case of optimisation where tail len is not modified (NOT yet tested!)
   // we have to handle it here first.
-#ifdef RRB_TAIL
   trrb->tail = leaf_node_clone(trrb->tail);
-#endif
   RRB* rrb = rrb_head_clone((const RRB *) trrb);
   return rrb;
 }
@@ -209,13 +193,12 @@ void* transient_rrb_peek(const TransientRRB *trrb) {
 
 static InternalNode** mutate_first_k(TransientRRB *trrb, const uint32_t k);
 
-static IF_TAIL(InternalNode**, void**)
+static InternalNode**
   new_editable_path(InternalNode **to_set, uint32_t pos, uint32_t empty_height,
                     const void *guid);
 
 TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restrict elt) {
   check_transience(trrb);
-#ifdef RRB_TAIL
   if (trrb->tail_len < RRB_BRANCHING) {
     trrb->tail->child[trrb->tail_len] = elt;
     trrb->cnt++;
@@ -224,12 +207,10 @@ TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restri
     // ^ consider deferring incrementing this until insertion and/or persistentified.
     return trrb;
   }
-#endif
 
   trrb->cnt++;
   const void *guid = trrb->guid;
 
-#ifdef RRB_TAIL
   LeafNode *new_tail = transient_leaf_node_create();
   new_tail->guid = guid;
   new_tail->child[0] = elt;
@@ -244,23 +225,12 @@ TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restri
     trrb->root = (TreeNode *) old_tail;
     return trrb;
   }
-#else
-  // check if the rrb is empty
-  if (trrb->cnt == 1) {
-    LeafNode *leaf = transient_leaf_node_create();
-    leaf->child[0] = elt;
-    leaf->len = 1;
-    trrb->shift = LEAF_NODE_SHIFT;
-    trrb->root = (TreeNode *) leaf;
-    return trrb;
-  }
-#endif
   // mutable count starts here
 
   // TODO: Can find last rightmost jump in constant time for pvec subvecs:
   // use the fact that (index & large_mask) == 1 << (RRB_BITS * H) - 1 -> 0 etc.
 
-  uint32_t index = trrb->cnt - IF_TAIL(2, 1);
+  uint32_t index = trrb->cnt - 2;
 
   uint32_t nodes_to_mutate = 0;
   uint32_t nodes_visited = 0;
@@ -271,7 +241,7 @@ TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restri
   uint32_t shift = RRB_SHIFT(trrb);
 
   // checking all non-leaf nodes (or if tail, all but the lowest two levels)
-  while (shift > IF_TAIL(INC_SHIFT(LEAF_NODE_SHIFT), 0)) {
+  while (shift > INC_SHIFT(LEAF_NODE_SHIFT)) {
     // calculate child index
     uint32_t child_index;
     if (current->size_table == NULL) {
@@ -320,22 +290,18 @@ TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restri
 
   // no need to even use index here: We know it'll be placed at current->len,
   // if there's enough space. That check is easy.
-#ifdef RRB_TAIL
   if (shift != 0) {
-#endif
     nodes_visited++;
     if (current->len < RRB_BRANCHING) {
       nodes_to_mutate = nodes_visited;
       pos = current->len;
     }
-#ifdef RRB_TAIL
   }
-#endif
 
  mutable_count_end:
   // GURRHH, nodes_visited is not yet handled nicely. loop down to get
   // nodes_visited set straight.
-  while (shift > IF_TAIL(INC_SHIFT(LEAF_NODE_SHIFT), 0)) {
+  while (shift > INC_SHIFT(LEAF_NODE_SHIFT)) {
     nodes_visited++;
     shift -= RRB_BITS;
   }
@@ -355,12 +321,12 @@ TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restri
         ((const InternalNode *) old_root)->size_table != NULL) {
       RRBSizeTable *table = transient_size_table_create();
       table->guid = trrb->guid;
-      table->size[0] = trrb->cnt - IF_TAIL((old_tail->len + 1), 1);
+      table->size[0] = trrb->cnt - (old_tail->len + 1);
       // If we insert the tail, the old size minus (new size minus one) the old
       // tail size will be the amount of elements in the left branch. If there
       // is no tail, the size is just the old rrb-tree.
 
-      table->size[1] = trrb->cnt - IF_TAIL(1, 0);
+      table->size[1] = trrb->cnt - 1;
       // If we insert the tail, the old size would include the tail.
       // Consequently, it has to be the old size. If we have no tail, we append
       // a single element to the old vector, therefore it has to be one more
@@ -370,27 +336,15 @@ TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restri
     }
 
     // nodes visited == original rrb tree height. Nodes visited > 0.
-#ifdef RRB_TAIL
     InternalNode **to_set = new_editable_path(&((InternalNode *) trrb->root)->child[1], 1,
                                               nodes_visited, guid);
     *to_set = (InternalNode *) old_tail;
-#else
-    void **to_set = new_editable_path(&((InternalNode *) trrb->root)->child[1], 1,
-                                      nodes_visited, guid);
-    *to_set = (void *) elt;
-#endif
   }
   else {
     InternalNode **node = mutate_first_k(trrb, nodes_to_mutate);
-#ifdef RRB_TAIL
     InternalNode **to_set = new_editable_path(node, pos,nodes_visited - nodes_to_mutate,
                                               guid);
     *to_set = (InternalNode *) old_tail;
-#else
-    void **to_set = new_editable_path(node, pos, nodes_visited - nodes_to_mutate,
-                                      guid);
-    *to_set = (void *) elt;
-#endif
   }
 
   return trrb;
@@ -400,12 +354,12 @@ static InternalNode** mutate_first_k(TransientRRB *trrb, const uint32_t k) {
   const void *guid = trrb->guid;
   InternalNode *current = (InternalNode *) trrb->root;
   InternalNode **to_set = (InternalNode **) &trrb->root;
-  uint32_t index = trrb->cnt - IF_TAIL(2, 1);
+  uint32_t index = trrb->cnt - 2;
   uint32_t shift = RRB_SHIFT(trrb);
 
   // mutate all non-leaf nodes first. Happens when shift > RRB_BRANCHING
   uint32_t i = 1;
-  while (i <= k IF_TAIL(,&& shift != 0)) {
+  while (i <= k && shift != 0) {
     // First off, ensure current node is editable
     current = ensure_internal_editable(current, guid);
     *to_set = current;
@@ -420,11 +374,11 @@ static InternalNode** mutate_first_k(TransientRRB *trrb, const uint32_t k) {
       RRBSizeTable *table = ensure_size_table_editable(current->size_table, current->len, guid);
       if (i != k) {
         // Tail will always be 32 long, otherwise we insert a single element only
-        table->size[current->len-1] += IF_TAIL(RRB_BRANCHING, 1);
+        table->size[current->len-1] += RRB_BRANCHING;
       }
       else { // increment size of last elt -- will only happen if we append empties
         table->size[current->len-1] =
-          table->size[current->len-2] + IF_TAIL(RRB_BRANCHING, 1);
+          table->size[current->len-2] + RRB_BRANCHING;
       }
       current->size_table = table;
     }
@@ -449,26 +403,19 @@ static InternalNode** mutate_first_k(TransientRRB *trrb, const uint32_t k) {
     shift -= RRB_BITS;
   }
 
-#ifndef RRB_TAIL
   // check if we need to mutate the leaf node. Very likely to happen (31/32)
   if (i == k) {
     LeafNode *leaf = ensure_leaf_editable((const LeafNode *) current, guid);
     leaf->len++;
     *to_set = (InternalNode *) leaf;
   }
-#endif
   return to_set;
 }
 
-static IF_TAIL(InternalNode**, void**)
-  new_editable_path(InternalNode **to_set, uint32_t pos, uint32_t empty_height,
-                    const void* guid) {
+static InternalNode** new_editable_path(InternalNode **to_set, uint32_t pos,
+                                        uint32_t empty_height, const void* guid) {
   if (0 < empty_height) {
-#ifdef RRB_TAIL
     InternalNode *leaf = transient_internal_node_create();
-#else
-    LeafNode *leaf = transient_leaf_node_create();
-#endif
     leaf->guid = guid;
     leaf->len = 1;
 
@@ -483,15 +430,9 @@ static IF_TAIL(InternalNode**, void**)
     *to_set = empty;
     return &leaf->child[0];
   }
-#ifdef RRB_TAIL
   else {
     return to_set;
   }
-#else
-  else {
-    return &((*((LeafNode **)to_set))->child[pos]);
-  }
-#endif
 }
 
 // transient_rrb_update is effectively the same as rrb_update, but may mutate
@@ -502,13 +443,11 @@ TransientRRB* transient_rrb_update(TransientRRB *restrict trrb, uint32_t index,
   check_transience(trrb);
   const void* guid = trrb->guid;
   if (index < trrb->cnt) {
-#ifdef RRB_TAIL
     const uint32_t tail_offset = trrb->cnt - trrb->tail_len;
     if (tail_offset <= index) {
       trrb->tail->child[index - tail_offset] = elt;
       return trrb;
     }
-#endif
     InternalNode **previous_pointer = (InternalNode **) &trrb->root;
     InternalNode *current = (InternalNode *) trrb->root;
     LeafNode *leaf;
@@ -547,7 +486,6 @@ TransientRRB* transient_rrb_update(TransientRRB *restrict trrb, uint32_t index,
   }
 }
 
-#ifdef RRB_TAIL
 TransientRRB* transient_rrb_pop(TransientRRB *trrb) {
   check_transience(trrb);
   if (trrb->cnt == 1) {
@@ -571,68 +509,7 @@ TransientRRB* transient_rrb_pop(TransientRRB *trrb) {
     return trrb;
   }
 }
-#else
-TransientRRB* transient_rrb_pop(TransientRRB *trrb) {
-  check_transience(trrb);
 
-  const void *guid = trrb->guid;
-
-  InternalNode *path[RRB_MAX_HEIGHT+1];
-  path[0] = trrb->root;
-  uint32_t i = 0, shift = LEAF_NODE_SHIFT;
-
-  // populate path array
-  for (i = 0, shift = LEAF_NODE_SHIFT; shift < RRB_SHIFT(trrb);
-       i++, shift += RRB_BITS) {
-    path[i+1] = path[i]->child[path[i]->len-1];
-  }
-
-  const uint32_t height = i;
-  LeafNode *leaf = (LeafNode *) path[height];
-  if (leaf->len == 1) { // Leaf node contains only single element
-    path[height] = NULL;
-  }
-  else {
-    // Remove last element
-    leaf = ensure_leaf_editable(leaf, guid);
-    leaf->child[leaf->len-1] = NULL;
-    leaf->len--;
-    path[height] = (InternalNode *) leaf;
-  }
-
-  while (i --> 0) { // from i = i - 1 downto (and including) 0
-    if (path[i+1] == NULL && path[i]->len == 1) {
-        path[i] = NULL;
-    }
-    // optimisation here (lines 25-29 in thesis): Instead of cloning the root
-    // node all the time, we avoid cloning it if we know we will discard the
-    // cloned root (i.e. the height of the trie shrinks). Avoids a memory
-    // allocation.
-    else if (path[i+1] == NULL && i == 0 && path[0]->len == 2) {
-      path[i] = path[i]->child[0];
-      trrb->shift -= RRB_BITS;
-    }
-    else {
-      path[i] = ensure_internal_editable(path[i], guid);
-      path[i]->child[path[i]->len-1] = path[i+1];
-      if (path[i+1] == NULL) {
-        path[i]->len--;
-      }
-      if (path[i]->size_table != NULL) { // this is decrement-size-table*
-        // copy and decrement last slot in size table if it exists
-        path[i]->size_table = ensure_size_table_editable(path[i]->size_table,
-                                                         path[i]->len, guid);
-        path[i]->size_table->size[path[i]->len-1]--;
-      }
-    }
-  }
-
-  trrb->root = (TreeNode *) path[0];
-  return trrb;
-}
-#endif
-
-#ifdef RRB_TAIL
 void* transient_promote_rightmost_leaf(TransientRRB* trrb) {
   const void* guid = trrb->guid;
   InternalNode *current = (InternalNode *) trrb->root;
@@ -680,7 +557,6 @@ void* transient_promote_rightmost_leaf(TransientRRB* trrb) {
 
   trrb->root = (TreeNode *) path[0];
 }
-#endif
 
 // TODO: more efficient slicing algorithm for transients. Should in theory just
 // require some size table magic and converting cloning over to ensure_editable.
@@ -690,4 +566,3 @@ TransientRRB* transient_rrb_slice(TransientRRB *trrb, uint32_t from, uint32_t to
   memcpy(trrb, rrb, sizeof(RRB));
   return trrb;
 }
-#endif

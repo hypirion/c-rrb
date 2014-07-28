@@ -8,7 +8,7 @@ fi
 export CC='clang'
 export CFLAGS='-O0 -g'
 
-OPTIONS=(rrb-debug direct-append tail transients)
+OPTIONS=(rrb-debug)
 OPT_PERMS=$(( 2 ** ${#OPTIONS[@]} ))
 
 if [ "$1" = "full" ]; then

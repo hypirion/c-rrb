@@ -62,7 +62,7 @@ const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restr
 const RRB* rrb_concat(const RRB *left, const RRB *right);
 const RRB* rrb_slice(const RRB *rrb, uint32_t from, uint32_t to);
 
-#ifdef TRANSIENTS
+// Transients
 
 typedef struct _TransientRRB TransientRRB;
 
@@ -76,8 +76,6 @@ void* transient_rrb_peek(const TransientRRB *trrb);
 TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restrict elt);
 TransientRRB* transient_rrb_update(TransientRRB *restrict trrb, uint32_t index, const void *restrict elt);
 TransientRRB* transient_rrb_slice(TransientRRB *trrb, uint32_t from, uint32_t to);
-
-#endif
 
 
 #ifdef RRB_DEBUG

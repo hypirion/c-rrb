@@ -36,7 +36,6 @@ check_PROGRAMS += test_fibocat
 TESTS += test_fibocat
 test_fibocat_SOURCES = test_fibocat.c test.h
 
-if TRANSIENTS
 transient_check_programs = test_transient_push test_transient_push_2 \
 													 test_transient_update test_transient_pop
 transient_tests = test_transient_push test_transient_push_2 test_transient_update \
@@ -46,7 +45,6 @@ test_transient_push_SOURCES = test_transient_push.c test.h
 test_transient_push_2_SOURCES = test_transient_push_2.c test.h
 test_transient_update_SOURCES = test_transient_update.c test.h
 test_transient_pop_SOURCES = test_transient_pop.c test.h
-endif
 
 check_PROGRAMS += $(transient_check_programs)
 TESTS += $(transient_tests)

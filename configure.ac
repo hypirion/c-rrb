@@ -49,70 +49,7 @@ do
   RRB_MAX_HEIGHT_BITS=`expr $RRB_MAX_HEIGHT_BITS + $RRB_BITS`
 done]
 
-dnl Transients
-
-AH_TEMPLATE([TRANSIENTS],
-        [Include transient RRBs and related functions.])
-
-AC_ARG_ENABLE([transients],
-[  --disable-transients    Disable transients],
-[case "${enableval}" in
-  yes) transients=true ;;
-  no)  transients=false ;;
-  *) AC_MSG_ERROR([bad value ${enableval} for --disable-transients]) ;;
-esac],[transients=true])
-
-AM_CONDITIONAL([TRANSIENTS], [test x$transients = xtrue])
-
-if test x$transients = xtrue; then
-   AC_DEFINE([TRANSIENTS])
-fi
-
-dnl Transients checking whether they're called from their creation thread
-
-dnl note: Will only activate IFF transients are active
-
-AH_TEMPLATE([TRANSIENTS_CHECK_THREAD],
-        [Ensure transients are called from only one thread.])
-
-AC_ARG_ENABLE([transients-check-thread],
-[  --disable-transients-check-thread    Disable transient thread checking],
-[case "${enableval}" in
-  yes) transients_check_thread=true ;;
-  no)  transients_check_thread=false ;;
-  *) AC_MSG_ERROR([bad value ${enableval} for --disable-transients-check-thread]) ;;
-esac],[transients_check_thread=true=true])
-
-AM_CONDITIONAL([TRANSIENTS_CHECK_THREAD],
-               [test x$transients_check_thread = xtrue])
-
-if test x$transients = xtrue; then
-  if test x$transients_check_thread = xtrue; then
-    AC_DEFINE([TRANSIENTS_CHECK_THREAD])
-    AC_CHECK_LIB([pthread], [pthread_self], [THREADLIB=-pthread],
-               AC_MSG_ERROR([Needs pthread installed for transients.]))
-     AC_SUBST([THREADLIB])
-   fi
-fi
-
-dnl Direct append
-
-AH_TEMPLATE([DIRECT_APPEND],
-        [Perform RRB-appending without doing any type of rebalancing.])
-
-AC_ARG_ENABLE([direct-append],
-[  --disable-direct-append    Disable direct rrb-appending],
-[case "${enableval}" in
-  yes) direct_append=true ;;
-  no)  direct_append=false ;;
-  *) AC_MSG_ERROR([bad value ${enableval} for --disable-direct-append]) ;;
-esac],[direct_append=true])
-
-if test x$direct_append = xtrue; then
-   AC_DEFINE([DIRECT_APPEND])
-fi
-
-dnl Debugging functions
+dnl RRB debug flag
 
 AH_TEMPLATE([RRB_DEBUG],
         [Enable RRB-tree debugging functions.])
@@ -131,29 +68,7 @@ fi
 
 dnl Number of bits in the rrb tree
 
-AC_ARG_WITH([branching],
-        [AS_HELP_STRING([--with-branching=bits : number of bits per branching])],
-        [RRB_BITS=$withval],
-        [RRB_BITS=5])
-
 AC_SUBST([RRB_BITS])
-
-dnl Whether or not to include an RRB tail
-
-AH_TEMPLATE([RRB_TAIL],
-        [If set, asserts that the RRB-tree should use a tail.])
-
-AC_ARG_ENABLE([tail],
-[  --enable-tail    Enable rrb-tree tail usage.],
-[case "${enableval}" in
-  yes) rrb_tail=true ;;
-  no)  rrb_tail=false ;;
-  *) AC_MSG_ERROR([bad value ${enableval} for --enable-tail]) ;;
-esac],[rrb_tail=true])
-
-if test x$rrb_tail = xtrue; then
-   AC_DEFINE([RRB_TAIL])
-fi
 
 AC_DEFINE_UNQUOTED([RRB_BITS], [$RRB_BITS],
                                [The amount of bits used for a single node.])
