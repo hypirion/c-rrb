@@ -70,7 +70,6 @@ typedef struct LeafNode {
 } LeafNode;
 
 typedef struct RRBSizeTable {
-  char t; // Dummy variable to avoid empty struct. FIXME
   GUID_DECLARATION
   uint32_t size[];
 } RRBSizeTable;
