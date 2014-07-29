@@ -27,7 +27,7 @@
 #include "rrb_thread.h"
 #endif
 
-struct _TransientRRB {
+struct TransientRRB_ {
   uint32_t cnt;
   uint32_t shift;
 #ifdef RRB_TAIL

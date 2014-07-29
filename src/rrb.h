@@ -48,7 +48,7 @@
 #define RRB_EXTRAS 2
 #endif
 
-typedef struct _RRB RRB;
+typedef struct RRB RRB_;
 
 const RRB* rrb_create(void);
 
@@ -64,7 +64,7 @@ const RRB* rrb_slice(const RRB *rrb, uint32_t from, uint32_t to);
 
 #ifdef TRANSIENTS
 
-typedef struct _TransientRRB TransientRRB;
+typedef struct TransientRRB TransientRRB_;
 
 TransientRRB* rrb_to_transient(const RRB *rrb);
 const RRB* transient_to_rrb(TransientRRB *trrb);
