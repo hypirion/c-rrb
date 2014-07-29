@@ -1,6 +1,8 @@
 RRB-trees
 
-Relaxed Radix Balanced Trees.
+Relaxed Radix Balanced Trees. For an explanation on how this data structure
+works in detail, read http://infoscience.epfl.ch/record/169879/files/RMTrees.pdf
+and then my thesis: http://hypirion.com/thesis
 
 This library, unmodified, depends on automake tools and Boehm GC. On
 Debian-based distros, you can install the automake tools through:
