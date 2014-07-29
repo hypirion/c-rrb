@@ -2,10 +2,31 @@ RRB-trees
 
 Relaxed Radix Balanced Trees.
 
-To build, perform the following calls:
-    autoreconf --install
-    ./configure
-    make
+This library, unmodified, depends on automake tools and Boehm GC. On
+Debian-based distros, you can install the automake tools through:
+  sudo apt-get install build-essential automake autoconf gnu-standards\
+                       autoconf-doc libtool gettext autoconf-archive
+
+and Boehm GC through:
+  sudo apt-get install libgc-dev libgc1c2
+
+To build and install the library, perform the following calls:
+  autoreconf --install
+  CFLAGS='-Ofast' ./configure
+  make
+  make check ## but only if you want to
+  sudo make install
+
+The `sudo make install` call should return a message which tells you where the
+library has been installed (usually `/usr/local/lib`). Now, to check that the
+installation went successfully, you try to compile one of the test suite
+programs on its own:
+  cd test-suite
+  gcc -o testy test_concat.c -std=c11 -lrrb -lgc
+  ./testy # should work fine
+    
+If you want to uninstall the library, do `sudo make uninstall` in the same
+directory. (You have to ./configure it first though.)
 
 Copyright © 2013-2014 Jean Niklas L'orange
 
