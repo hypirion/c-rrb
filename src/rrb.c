@@ -964,28 +964,16 @@ void* rrb_nth(const RRB *rrb, uint32_t index) {
   }
   else {
     const InternalNode *current = (const InternalNode *) rrb->root;
-    switch (RRB_SHIFT(rrb)) {
-#define DECREMENT RRB_MAX_HEIGHT
-#include "decrement.h"
-#define WANTED_ITERATIONS DECREMENT
-#define REVERSE_I(i) (RRB_MAX_HEIGHT - i - 1)
-#define LOOP_BODY(i) case (RRB_BITS * REVERSE_I(i)):                  \
-      if (current->size_table == NULL) {                              \
-        const uint32_t subidx = (index >> (RRB_BITS * REVERSE_I(i)))  \
-                                & RRB_MASK;                           \
-        current = current->child[subidx];                             \
-      }                                                               \
-      else {                                                          \
-        current = sized(current, &index, RRB_BITS * REVERSE_I(i));    \
+    for (uint32_t shift = RRB_SHIFT(rrb); shift > 0; shift -= RRB_BITS) {
+      if (current->size_table == NULL) {
+        const uint32_t subidx = (index >> shift) & RRB_MASK;
+        current = current->child[subidx];
       }
-#include "unroll.h"
-#undef DECREMENT
-#undef REVERSE_I
-    case 0:
-      return ((const LeafNode *)current)->child[index & RRB_MASK];
-    default:
-      return NULL;
+      else {
+        current = sized(current, &index, shift);
+      }
     }
+    return ((const LeafNode *)current)->child[index & RRB_MASK];
   }
 }
 
@@ -1390,36 +1378,26 @@ const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restr
     }
     InternalNode **previous_pointer = (InternalNode **) &new_rrb->root;
     InternalNode *current = (InternalNode *) rrb->root;
-    LeafNode *leaf;
-    uint32_t child_index;
-    switch (RRB_SHIFT(rrb)) {
-#define DECREMENT RRB_MAX_HEIGHT
-#include "decrement.h"
-#define WANTED_ITERATIONS DECREMENT
-#define REVERSE_I(i) (RRB_MAX_HEIGHT - i - 1)
-#define LOOP_BODY(i) case (RRB_BITS * REVERSE_I(i)):  \
-      current = internal_node_clone(current); \
-      *previous_pointer = current; \
-      if (current->size_table == NULL) { \
-        child_index = (index >> (RRB_BITS * REVERSE_I(i))) & RRB_MASK; \
-      } \
-      else { \
-        child_index = sized_pos(current, &index, RRB_BITS * REVERSE_I(i)); \
-      } \
-      previous_pointer = &current->child[child_index]; \
+    for (uint32_t shift = RRB_SHIFT(rrb); shift > 0; shift -= RRB_BITS) {
+      current = internal_node_clone(current);
+      *previous_pointer = current;
+
+      uint32_t child_index;
+      if (current->size_table == NULL) {
+        child_index = (index >> shift) & RRB_MASK;
+      }
+      else {
+        child_index = sized_pos(current, &index, shift);
+      }
+      previous_pointer = &current->child[child_index];
       current = current->child[child_index];
-#include "unroll.h"
-#undef DECREMENT
-#undef REVERSE_I
-    case 0:
-      leaf = (LeafNode *) current;
-      leaf = leaf_node_clone(leaf);
-      *previous_pointer = (InternalNode *) leaf;
-      leaf->child[index & RRB_MASK] = elt;
-      return new_rrb;
-    default:
-      return NULL;
     }
+    
+    LeafNode *leaf = (LeafNode *) current;
+    leaf = leaf_node_clone(leaf);
+    *previous_pointer = (InternalNode *) leaf;
+    leaf->child[index & RRB_MASK] = elt;
+    return new_rrb;
   }
   else {
     return NULL;

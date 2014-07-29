@@ -405,7 +405,7 @@ static InternalNode** mutate_first_k(TransientRRB *trrb, const uint32_t k) {
 
   // check if we need to mutate the leaf node. Very likely to happen (31/32)
   if (i == k) {
-    LeafNode *leaf = ensure_leaf_editable((const LeafNode *) current, guid);
+    LeafNode *leaf = ensure_leaf_editable((LeafNode *) current, guid);
     leaf->len++;
     *to_set = (InternalNode *) leaf;
   }
@@ -450,36 +450,26 @@ TransientRRB* transient_rrb_update(TransientRRB *restrict trrb, uint32_t index,
     }
     InternalNode **previous_pointer = (InternalNode **) &trrb->root;
     InternalNode *current = (InternalNode *) trrb->root;
-    LeafNode *leaf;
-    uint32_t child_index;
-    switch (RRB_SHIFT(trrb)) {
-#define DECREMENT RRB_MAX_HEIGHT
-#include "decrement.h"
-#define WANTED_ITERATIONS DECREMENT
-#define REVERSE_I(i) (RRB_MAX_HEIGHT - i - 1)
-#define LOOP_BODY(i) case (RRB_BITS * REVERSE_I(i)):  \
-      current = ensure_internal_editable(current, guid);  \
-      *previous_pointer = current; \
-      if (current->size_table == NULL) { \
-        child_index = (index >> (RRB_BITS * REVERSE_I(i))) & RRB_MASK; \
-      } \
-      else { \
-        child_index = sized_pos(current, &index, RRB_BITS * REVERSE_I(i)); \
-      } \
-      previous_pointer = &current->child[child_index]; \
+    for (uint32_t shift = RRB_SHIFT(trrb); shift > 0; shift -= RRB_BITS) {
+      current = ensure_internal_editable(current, guid);
+      *previous_pointer = current;
+
+      uint32_t child_index;
+      if (current->size_table == NULL) {
+        child_index = (index >> shift) & RRB_MASK;
+      }
+      else {
+        child_index = sized_pos(current, &index, shift);
+      }
+      previous_pointer = &current->child[child_index];
       current = current->child[child_index];
-#include "unroll.h"
-#undef DECREMENT
-#undef REVERSE_I
-    case 0:
-      leaf = (LeafNode *) current;
-      leaf = ensure_leaf_editable(leaf, guid);
-      *previous_pointer = (InternalNode *) leaf;
-      leaf->child[index & RRB_MASK] = elt;
-      return trrb;
-    default:
-      return NULL;
     }
+    
+    LeafNode *leaf = (LeafNode *) current;
+    leaf = ensure_leaf_editable((LeafNode *) leaf, guid);
+    *previous_pointer = (InternalNode *) leaf;
+    leaf->child[index & RRB_MASK] = elt;
+    return trrb;
   }
   else {
     return NULL;
@@ -515,7 +505,7 @@ void* transient_promote_rightmost_leaf(TransientRRB* trrb) {
   InternalNode *current = (InternalNode *) trrb->root;
 
   InternalNode *path[RRB_MAX_HEIGHT+1];
-  path[0] = trrb->root;
+  path[0] = (InternalNode *) trrb->root;
   uint32_t i = 0, shift = LEAF_NODE_SHIFT;
 
   // populate path array
