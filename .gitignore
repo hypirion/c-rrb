@@ -31,3 +31,4 @@
 /test-suite/Makefile.in
 /confdefs.h
 /benchmark-suite/Makefile.in
+/src/rrb.h

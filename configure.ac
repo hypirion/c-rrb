@@ -33,7 +33,7 @@ AC_SUBST([DEBUG_VARS])
 AC_PROG_CC_STDC
 
 dnl ----------------------------------------------------------------------------
-dnl Defines within config.h
+dnl Configs directly injected into rrb.h
 
 AC_ARG_WITH([branching],
         [AS_HELP_STRING([--with-branching=bits : number of bits per branching])],
@@ -64,6 +64,9 @@ esac],[rrb_debug=true])
 
 if test x$rrb_debug = xtrue; then
    AC_DEFINE([RRB_DEBUG])
+   AC_SUBST([RRB_DEBUG], true)
+else
+   AC_SUBST([RRB_DEBUG], false)
 fi
 
 dnl Number of bits in the rrb tree
@@ -74,7 +77,7 @@ AC_DEFINE_UNQUOTED([RRB_BITS], [$RRB_BITS],
                                [The amount of bits used for a single node.])
 AC_DEFINE_UNQUOTED([RRB_MAX_HEIGHT], [$RRB_MAX_HEIGHT],
                                      [The maximal height the RRB tree can have.])
-
+AC_SUBST([RRB_MAX_HEIGHT], [$RRB_MAX_HEIGHT])
 dnl ----------------------------------------------------------------------------
 dnl Check that libraries exist
 
@@ -91,8 +94,8 @@ AC_CHECK_HEADERS([stdlib.h])
 AC_CHECK_HEADERS([string.h])
 AC_CHECK_HEADERS([time.h])
 
-AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile benchmark-suite/Makefile
-                 test-suite/Makefile src/Makefile])
+                 test-suite/Makefile src/Makefile
+                 src/rrb.h])
 
 AC_OUTPUT
