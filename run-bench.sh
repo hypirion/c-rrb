@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+if [ "$(git rev-parse --abbrev-ref HEAD)" != "experimental" ]; then
+    echo "Needs to run benchmarks in experimental mode:"
+    echo "  Development and master branches only contain the most efficient options."
+    exit 1
+fi
+
 # First ensure that configure is existing
 if [ ! -x configure ]; then
     autoreconf --install
