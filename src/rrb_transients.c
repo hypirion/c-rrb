@@ -23,7 +23,7 @@
 
 #include "rrb_thread.h"
 
-struct _TransientRRB {
+struct TransientRRB_ {
   uint32_t cnt;
   uint32_t shift;
   uint32_t tail_len;

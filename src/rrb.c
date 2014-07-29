@@ -82,7 +82,7 @@ typedef struct InternalNode {
   struct InternalNode *child[];
 } InternalNode;
 
-struct _RRB {
+struct RRB_ {
   uint32_t cnt;
   uint32_t shift;
   uint32_t tail_len;
