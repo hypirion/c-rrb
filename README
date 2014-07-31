@@ -49,11 +49,15 @@ installation went successfully, you try to compile one of the test suite
 programs on its own:
 
   cd test-suite
-  gcc -o testy test_concat.c -std=c11 -lrrb -lgc
-  ./testy # should work fine
+  gcc -o testy printing_example.c -std=c11 -lrrb -lgc
+  ./testy # should work fine, and should create the file "foo.dot"
+  dot -Tpng -o foo.png foo.dot # If you have `dot` installed
+
+If this doesn't work by default, then it might be that your linker has a cache
+which needs to be updated. Try `sudo ldconfig` and rerun the compilation step.
     
-If you want to uninstall the library, do `sudo make uninstall` in the same
-directory. (You have to ./configure it first though.)
+If you want to uninstall the library, do `sudo make uninstall` in the project
+root directory. (You have to ./configure it first though.)
 
 Copyright © 2013-2014 Jean Niklas L'orange
 
