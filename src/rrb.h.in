@@ -69,15 +69,15 @@ TransientRRB* transient_rrb_slice(TransientRRB *trrb, uint32_t from, uint32_t to
 
 #include <stdio.h>
 
-typedef struct _DotFile DotFile;
+typedef struct DotFile_ DotFile;
 
-void rrb_to_dot_file(const RRB *rrb, char *loch);
+int rrb_to_dot_file(const RRB *rrb, char *loch);
 
 DotFile dot_file_create(char *loch);
-void dot_file_close(DotFile dot);
+int dot_file_close(DotFile dot);
 
-void label_pointer(DotFile dot, const void *node, const char *name);
-void rrb_to_dot(DotFile dot, const RRB *rrb);
+int label_pointer(DotFile dot, const void *node, const char *name);
+int rrb_to_dot(DotFile dot, const RRB *rrb);
 
 uint32_t rrb_memory_usage(const RRB *const *rrbs, uint32_t rrb_count);
 

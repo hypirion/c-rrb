@@ -159,7 +159,7 @@ typedef struct _DotArray {
   const void **elems;
 } DotArray;
 
-struct _DotFile {
+struct DotFile_ {
   FILE *file;
   DotArray *array;
 };
@@ -168,10 +168,10 @@ static DotArray* dot_array_create(void);
 static char dot_array_contains(const DotArray *arr, const void *elem);
 static void dot_array_add(DotArray *arr, const void *elem);
 
-static void tree_node_to_dot(DotFile dot, const TreeNode *node, char print_table);
-static void leaf_node_to_dot(DotFile dot, const LeafNode *root);
-static void internal_node_to_dot(DotFile dot, const InternalNode *root, char print_table);
-static void size_table_to_dot(DotFile dot, const InternalNode *node);
+static int tree_node_to_dot(DotFile dot, const TreeNode *node, char print_table);
+static int leaf_node_to_dot(DotFile dot, const LeafNode *root);
+static int internal_node_to_dot(DotFile dot, const InternalNode *root, char print_table);
+static int size_table_to_dot(DotFile dot, const InternalNode *node);
 
 static uint32_t node_size(DotArray *arr, const TreeNode *node);
 #endif
@@ -1391,7 +1391,7 @@ const RRB* rrb_update(const RRB *restrict rrb, uint32_t index, const void *restr
       previous_pointer = &current->child[child_index];
       current = current->child[child_index];
     }
-    
+
     LeafNode *leaf = (LeafNode *) current;
     leaf = leaf_node_clone(leaf);
     *previous_pointer = (InternalNode *) leaf;
@@ -1463,14 +1463,27 @@ static void dot_array_add(DotArray *arr, const void *elem) {
 
 static int null_counter = 0;
 
-void label_pointer(DotFile dot, const void *node, const char *name) {
-  fprintf(dot.file, "  \"%s\";\n", name);
+// This is a hack to ensure sizes are of correct size: Assumes the variable t
+// and sum is defined, and that both are set to 0.
+#define SHORT_CIRCUIT(expr) do {                \
+    t = expr;                                   \
+    if (t < 0) {                                \
+      return t;                                 \
+    }                                           \
+    sum += t; t = 0;                            \
+  } while (0)                                   \
+
+
+int label_pointer(DotFile dot, const void *node, const char *name) {
+  int t, sum = 0;
+  SHORT_CIRCUIT(fprintf(dot.file, "  \"%s\";\n", name));
   if (node == NULL) { // latest NIL node will be referred to.
-    fprintf(dot.file, "  \"%s\" -> s%d;\n", name, null_counter - 1);
+    SHORT_CIRCUIT(fprintf(dot.file, "  \"%s\" -> s%d;\n", name, null_counter - 1));
   }
   else {
-    fprintf(dot.file, "  \"%s\" -> s%p;\n", name, node);
+    SHORT_CIRCUIT(fprintf(dot.file, "  \"%s\" -> s%p;\n", name, node));
   }
+  return sum;
 }
 
 static char dot_file_contains(const DotFile dot, const void *elem) {
@@ -1483,27 +1496,41 @@ static void dot_file_add(DotFile dot, const void *elem) {
 
 DotFile dot_file_create(char *loch) {
   FILE *file = fopen(loch, "w");
+  if (file == NULL) {
+    DotFile err = {.file = NULL, .array = NULL};
+    return err;
+  }
   DotArray *arr = dot_array_create();
   fprintf(file, "digraph g {\n  bgcolor=transparent;\n  node [shape=none];\n");
   DotFile dot_file = {.file = file, .array = arr};
   return dot_file;
 }
 
-void dot_file_close(DotFile dot) {
+int dot_file_close(DotFile dot) {
   fprintf(dot.file, "}\n");
-  fclose(dot.file);
+  return fclose(dot.file);
 }
 
-void rrb_to_dot_file(const RRB *rrb, char *loch) {
+int rrb_to_dot_file(const RRB *rrb, char *loch) {
   DotFile dot = dot_file_create(loch);
-  rrb_to_dot(dot, rrb);
-  dot_file_close(dot);
+  if (dot.file == NULL) {
+    return -1;
+  }
+  int written = rrb_to_dot(dot, rrb);
+  if (written < 0) {
+    return -2;
+  }
+  if (dot_file_close(dot) != 0) {
+    return -1;
+  }
+  return written;
 }
 
-void rrb_to_dot(DotFile dot, const RRB *rrb) {
+int rrb_to_dot(DotFile dot, const RRB *rrb) {
+  int t, sum = 0;
   if (!dot_file_contains(dot, rrb)) {
     dot_file_add(dot, rrb);
-    fprintf(dot.file,
+    SHORT_CIRCUIT(fprintf(dot.file,
             "  s%p [label=<\n<table border=\"0\" cellborder=\"1\" "
             "cellspacing=\"0\" cellpadding=\"6\" align=\"center\">\n"
             "  <tr>\n"
@@ -1514,135 +1541,146 @@ void rrb_to_dot(DotFile dot, const RRB *rrb) {
             "    <td height=\"36\" width=\"25\" port=\"tail\"></td>\n"
             "  </tr>\n"
             "</table>>];\n",
-            rrb, rrb->cnt, rrb->shift, rrb->tail_len, 0);
+                          rrb, rrb->cnt, rrb->shift, rrb->tail_len));
     if (rrb->tail == NULL) {
-      fprintf(dot.file, "  s%d [label=\"NIL\"];\n", null_counter);
-      fprintf(dot.file, "  s%p:tail -> s%d;\n", rrb, null_counter++);
+      SHORT_CIRCUIT(fprintf(dot.file, "  s%d [label=\"NIL\"];\n", null_counter));
+      SHORT_CIRCUIT(fprintf(dot.file, "  s%p:tail -> s%d;\n", rrb, null_counter++));
     }
     else {
-      fprintf(dot.file, "  s%p:tail -> s%p:body;\n", rrb, rrb->tail);
+      SHORT_CIRCUIT(fprintf(dot.file, "  s%p:tail -> s%p:body;\n", rrb, rrb->tail));
       // Consider doing the rank=same thing.
-      leaf_node_to_dot(dot, rrb->tail);
+      SHORT_CIRCUIT(leaf_node_to_dot(dot, rrb->tail));
     }
     if (rrb->root == NULL) {
-      fprintf(dot.file, "  s%p:root -> s%d;\n", rrb, null_counter);
+      SHORT_CIRCUIT(fprintf(dot.file, "  s%p:root -> s%d;\n", rrb, null_counter));
     }
     else {
-      fprintf(dot.file, "  s%p:root -> s%p:body;\n", rrb, rrb->root);
+      SHORT_CIRCUIT(fprintf(dot.file, "  s%p:root -> s%p:body;\n", rrb, rrb->root));
     }
-    tree_node_to_dot(dot, rrb->root, true);
+    SHORT_CIRCUIT(tree_node_to_dot(dot, rrb->root, true));
   }
+  return sum;
 }
 
-static void tree_node_to_dot(DotFile dot, const TreeNode *root, char print_table) {
+static int tree_node_to_dot(DotFile dot, const TreeNode *root, char print_table) {
   if (root == NULL) {
-    fprintf(dot.file, "  s%d [label=\"NIL\"];\n",
-            null_counter++);
-    return;
+    return fprintf(dot.file, "  s%d [label=\"NIL\"];\n",
+                   null_counter++);
   }
   switch (root->type) {
   case LEAF_NODE:
-    leaf_node_to_dot(dot, (const LeafNode *) root);
-    return;
+    return leaf_node_to_dot(dot, (const LeafNode *) root);
   case INTERNAL_NODE:
-    internal_node_to_dot(dot, (const InternalNode *) root, print_table);
-    return;
+    return internal_node_to_dot(dot, (const InternalNode *) root, print_table);
   }
 }
 
-static void internal_node_to_dot(DotFile dot, const InternalNode *root,
-                                 char print_table) {
+static int internal_node_to_dot(DotFile dot, const InternalNode *root,
+                                char print_table) {
+  int t, sum = 0;
   if (!dot_file_contains(dot, root)) {
     dot_file_add(dot, root);
-    fprintf(dot.file,
+    SHORT_CIRCUIT(fprintf(dot.file,
             "  s%p [label=<\n<table border=\"0\" cellborder=\"1\" "
             "cellspacing=\"0\" cellpadding=\"6\" align=\"center\" port=\"body\">\n"
             "  <tr>\n"
             "    <td height=\"36\" width=\"25\" port=\"table\"></td>\n",
-            root);
+                          root));
     for (uint32_t i = 0; i < root->len; i++) {
-      fprintf(dot.file, "    <td height=\"36\" width=\"25\" port=\"%d\">%d</td>\n",
-              i, i);
+      SHORT_CIRCUIT(fprintf(dot.file,
+                           "    <td height=\"36\" width=\"25\" port=\"%d\">%d</td>\n",
+                            i, i));
     }
-    fprintf(dot.file, "  </tr>\n</table>>];\n");
-
+    SHORT_CIRCUIT(fprintf(dot.file, "  </tr>\n</table>>];\n"));
 
     if (print_table) {
       if (root->size_table == NULL) {
-        size_table_to_dot(dot, root);
-        fprintf(dot.file, "  {rank=same; s%p; s%d;}\n", root, null_counter - 1);
-        fprintf(dot.file, "  s%d -> s%p:table [dir=back];\n",
-                null_counter - 1, root);
+        SHORT_CIRCUIT(size_table_to_dot(dot, root));
+        SHORT_CIRCUIT(fprintf(dot.file, "  {rank=same; s%p; s%d;}\n",
+                              root, null_counter - 1));
+        SHORT_CIRCUIT(fprintf(dot.file, "  s%d -> s%p:table [dir=back];\n",
+                              null_counter - 1, root));
       }
       else if (!dot_file_contains(dot, root->size_table)) {
         // Only do if size table isn't already placed
         // set rrb node and size table at same rank
 
-        fprintf(dot.file, "  {rank=same; s%p; s%p;}\n", root, root->size_table);
-        size_table_to_dot(dot, root);
+        SHORT_CIRCUIT(fprintf(dot.file, "  {rank=same; s%p; s%p;}\n",
+                              root, root->size_table));
+        SHORT_CIRCUIT(size_table_to_dot(dot, root));
       }
       if (root->size_table != NULL) {
         // "Hack" to get nodes at correct position
-        fprintf(dot.file, "  s%p:last -> s%p:table [dir=back];\n",
-                root->size_table, root);
+        SHORT_CIRCUIT(fprintf(dot.file, "  s%p:last -> s%p:table [dir=back];\n",
+                              root->size_table, root));
       }
 
     }
 
     for (uint32_t i = 0; i < root->len; i++) {
       if (root->child[i] == NULL) {
-        fprintf(dot.file, "  s%p:%d -> s%d;\n", root, i, null_counter);
+        SHORT_CIRCUIT(fprintf(dot.file, "  s%p:%d -> s%d;\n", root, i,
+                              null_counter));
       }
       else {
-        fprintf(dot.file, "  s%p:%d -> s%p:body;\n", root, i, root->child[i]);
+        SHORT_CIRCUIT(fprintf(dot.file, "  s%p:%d -> s%p:body;\n", root, i,
+                              root->child[i]));
       }
-      tree_node_to_dot(dot, (TreeNode *) root->child[i], print_table);
+      SHORT_CIRCUIT(tree_node_to_dot(dot, (TreeNode *) root->child[i],
+                                     print_table));
     }
   }
+  return sum;
 }
 
 
-static void size_table_to_dot(DotFile dot, const InternalNode *node) {
+static int size_table_to_dot(DotFile dot, const InternalNode *node) {
+  int t, sum = 0;
   if (node->size_table == NULL) {
-    fprintf(dot.file, "  s%d [color=indianred, label=\"NIL\"];\n",
-            null_counter++);
-    return;
+    return fprintf(dot.file, "  s%d [color=indianred, label=\"NIL\"];\n",
+                   null_counter++);
   }
   if (!dot_file_contains(dot, node->size_table)) {
     dot_file_add(dot, node->size_table);
     RRBSizeTable *table = node->size_table;
-    fprintf(dot.file,
+    SHORT_CIRCUIT(fprintf(dot.file,
             "  s%p [color=indianred, label=<\n"
             "<table border=\"0\" cellborder=\"1\" cellspacing=\"0\" "
             "cellpadding=\"6\" align=\"center\" port=\"body\">\n"
             "  <tr>\n",
-            table);
+            table));
     for (uint32_t i = 0; i < node->len; i++) {
       int remaining_nodes = (i+1) < node->len;
-      fprintf(dot.file, "    <td height=\"36\" width=\"25\" %s>%d</td>\n",
-              !remaining_nodes ? "port=\"last\"" : "",
-              table->size[i]);
+      SHORT_CIRCUIT(
+        fprintf(dot.file, "    <td height=\"36\" width=\"25\" %s>%d</td>\n",
+                !remaining_nodes ? "port=\"last\"" : "",
+                table->size[i]));
     }
-    fprintf(dot.file, "  </tr>\n</table>>];\n");
+    SHORT_CIRCUIT(fprintf(dot.file, "  </tr>\n</table>>];\n"));
   }
+  return sum;
 }
 
-static void leaf_node_to_dot(DotFile dot, const LeafNode *root) {
+static int leaf_node_to_dot(DotFile dot, const LeafNode *root) {
+  int t, sum = 0;
   if (!dot_file_contains(dot, root)) {
     dot_file_add(dot, root);
-    fprintf(dot.file,
+    SHORT_CIRCUIT(fprintf(dot.file,
             "  s%p [color=darkolivegreen3, label=<\n"
             "<table border=\"0\" cellborder=\"1\" cellspacing=\"0\" "
             "cellpadding=\"6\" align=\"center\" port=\"body\">\n"
             "  <tr>\n",
-            root);
+            root));
     for (uint32_t i = 0; i < root->len; i++) {
       uintptr_t leaf = (uintptr_t) root->child[i];
-      fprintf(dot.file, "    <td height=\"36\" width=\"25\">%lx</td>\n",
-              leaf);
+      SHORT_CIRCUIT(
+        fprintf(dot.file, "    <td height=\"36\" width=\"25\">%lx</td>\n",
+                leaf));
     }
-    fprintf(dot.file, "  </tr>\n</table>>];\n");
+    SHORT_CIRCUIT(
+      fprintf(dot.file, "  </tr>\n</table>>];\n"));
   }
+  return sum;
 }
 
 static uint32_t node_size(DotArray *set, const TreeNode *root) {
