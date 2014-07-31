@@ -148,11 +148,16 @@ visualised.
 
 
 ```c
-void rrb_to_dot_file(const RRB *rrb, char *fname)
+int rrb_to_dot_file(const RRB *rrb, char *fname)
 ```
+
 Writes a new file with the filename `fname` with a dot representation of the
 RRB-Tree provided. If the file already exists, the original content is
 overridden.
+
+The total size of the file is returned in bytes, `-1` if `fopen` or `fclose`
+returns an error, or `-2` if any `fprintf` call returns an error. `errno` is not
+modified, so the error code will reside within this variable.
 
 ```c
 DotFile dot_file_create(char *fname)
@@ -160,26 +165,39 @@ DotFile dot_file_create(char *fname)
 Creates and opens a DotFile. Note that a DotFile is passed by value, not by
 pointer.
 
+If the opening of the file, as done by `fopen`, errors, then `errno` is set as
+by `fopen`.
+
 ```c
-void dot_file_close(DotFile dot)
+int dot_file_close(DotFile dot)
 ```
 Writes and closes a DotFile to disk. Any call performed after the DotFile is
 closed is considered an error.
 
+The result of closing a DotFile is as `fclose`.
+
 ```c
-void rrb_to_dot(DotFile dot, const RRB *rrb)
+int rrb_to_dot(DotFile dot, const RRB *rrb)
 ```
 Writes the RRB-Tree to the dot file, if not already written. Shared structure
 between RRB-Trees is visualised, with the exception of `NULL`/`nil` pointers.
 
+Returns the amount of bytes written, or a negative number if any `fprintf` call
+errors. The function will short-circuit if an error happens, and the `errno`
+variable is not modified.
+
 ```c
-void label_pointer(DotFile dot, const void *node, const char *name)
+int label_pointer(DotFile dot, const void *node, const char *name)
 ```
 Labels a pointer (Usually an RRB-Tree pointer) in the dot file. It is legal with
 multiple labels on a single pointer. If the pointer is `NULL`, the label will be
 attached to the latest `NULL` pointer added to the dot file. Labelling pointers
 not contained in the dot file is not an error, but will generate strange
 visualisations.
+
+Returns the amount of bytes written, or a negative number if any `fprintf` call
+errors. The function will short-circuit if an error happens, and the `errno`
+variable is not modified.
 
 ```c
 uint32_t rrb_memory_usage(const RRB *const *rrbs, uint32_t rrb_count)
