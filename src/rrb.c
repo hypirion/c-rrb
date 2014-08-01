@@ -1423,7 +1423,7 @@ const RRB* rrb_pop(const RRB *rrb) {
   }
 }
 
-#include "rrb_transients.c"
+#include "rrb_transients.h"
 
 /******************************************************************************/
 /*                    DEBUGGING AND VISUALIZATION METHODS                     */
