@@ -52,7 +52,7 @@ static RRBSizeTable* ensure_size_table_editable(const RRBSizeTable *table,
 static InternalNode* ensure_internal_editable(InternalNode *internal, const void *guid);
 static LeafNode* ensure_leaf_editable(LeafNode *leaf, const void *guid);
 
-static void* transient_promote_rightmost_leaf(TransientRRB* trrb);
+static void transient_promote_rightmost_leaf(TransientRRB* trrb);
 
 static const void* rrb_guid_create() {
   return (const void *) RRB_MALLOC_ATOMIC(1);
@@ -193,9 +193,8 @@ void* transient_rrb_peek(const TransientRRB *trrb) {
 
 static InternalNode** mutate_first_k(TransientRRB *trrb, const uint32_t k);
 
-static InternalNode**
-  new_editable_path(InternalNode **to_set, uint32_t pos, uint32_t empty_height,
-                    const void *guid);
+static InternalNode** new_editable_path(InternalNode **to_set,
+                                        uint32_t empty_height, const void *guid);
 
 TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restrict elt) {
   check_transience(trrb);
@@ -336,13 +335,13 @@ TransientRRB* transient_rrb_push(TransientRRB *restrict trrb, const void *restri
     }
 
     // nodes visited == original rrb tree height. Nodes visited > 0.
-    InternalNode **to_set = new_editable_path(&((InternalNode *) trrb->root)->child[1], 1,
+    InternalNode **to_set = new_editable_path(&((InternalNode *) trrb->root)->child[1],
                                               nodes_visited, guid);
     *to_set = (InternalNode *) old_tail;
   }
   else {
     InternalNode **node = mutate_first_k(trrb, nodes_to_mutate);
-    InternalNode **to_set = new_editable_path(node, pos,nodes_visited - nodes_to_mutate,
+    InternalNode **to_set = new_editable_path(node, nodes_visited - nodes_to_mutate,
                                               guid);
     *to_set = (InternalNode *) old_tail;
   }
@@ -412,8 +411,8 @@ static InternalNode** mutate_first_k(TransientRRB *trrb, const uint32_t k) {
   return to_set;
 }
 
-static InternalNode** new_editable_path(InternalNode **to_set, uint32_t pos,
-                                        uint32_t empty_height, const void* guid) {
+static InternalNode** new_editable_path(InternalNode **to_set, uint32_t empty_height,
+                                        const void* guid) {
   if (0 < empty_height) {
     InternalNode *leaf = transient_internal_node_create();
     leaf->guid = guid;
@@ -500,7 +499,7 @@ TransientRRB* transient_rrb_pop(TransientRRB *trrb) {
   }
 }
 
-void* transient_promote_rightmost_leaf(TransientRRB* trrb) {
+void transient_promote_rightmost_leaf(TransientRRB* trrb) {
   const void* guid = trrb->guid;
   InternalNode *current = (InternalNode *) trrb->root;
 

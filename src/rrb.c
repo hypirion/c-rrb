@@ -141,7 +141,6 @@ static TreeNode* slice_left_rec(uint32_t *total_shift, const TreeNode *root,
                                 uint32_t left, uint32_t shift,
                                 char has_right);
 
-static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift);
 static RRB* rrb_head_clone(const RRB *original);
 
 static RRB* push_down_tail(const RRB *restrict rrb, RRB *restrict new_rrb,
@@ -170,14 +169,6 @@ static inline RRBSizeTable* size_table_inc(const RRBSizeTable *original,
                                   (len + 1) * sizeof(uint32_t));
   memcpy(&incr->size, &original->size, sizeof(uint32_t) * len);
   return incr;
-}
-
-static RRB* rrb_head_create(TreeNode *node, uint32_t size, uint32_t shift) {
-  RRB *rrb = RRB_MALLOC(sizeof(RRB));
-  rrb->root = node;
-  rrb->cnt = size;
-  rrb->shift = shift;
-  return rrb;
 }
 
 static RRB* rrb_head_clone(const RRB* original) {
@@ -688,7 +679,7 @@ static inline RRB* rrb_tail_push(const RRB *restrict rrb, const void *restrict e
 static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t k,
                                    const uint32_t tail_size);
 
-static InternalNode** append_empty(InternalNode **to_set, uint32_t pos,
+static InternalNode** append_empty(InternalNode **to_set,
                                    uint32_t empty_height);
 
 const RRB* rrb_push(const RRB *restrict rrb, const void *restrict elt) {
@@ -821,13 +812,13 @@ static RRB* push_down_tail(const RRB *restrict rrb, RRB *restrict new_rrb,
     }
 
     // nodes visited == original rrb tree height. Nodes visited > 0.
-    InternalNode **to_set = append_empty(&((InternalNode *) new_rrb->root)->child[1], 1,
+    InternalNode **to_set = append_empty(&((InternalNode *) new_rrb->root)->child[1],
                                          nodes_visited);
     *to_set = (InternalNode *) old_tail;
   }
   else {
     InternalNode **node = copy_first_k(rrb, new_rrb, nodes_to_copy, old_tail->len);
-    InternalNode **to_set = append_empty(node, pos, nodes_visited - nodes_to_copy);
+    InternalNode **to_set = append_empty(node, nodes_visited - nodes_to_copy);
     *to_set = (InternalNode *) old_tail;
   }
 
@@ -889,7 +880,7 @@ static InternalNode** copy_first_k(const RRB *rrb, RRB *new_rrb, const uint32_t 
   return to_set;
 }
 
-static InternalNode** append_empty(InternalNode **to_set, uint32_t pos,
+static InternalNode** append_empty(InternalNode **to_set,
                                    uint32_t empty_height) {
   if (0 < empty_height) {
     InternalNode *leaf = internal_node_create(1);
@@ -965,11 +956,8 @@ void* rrb_peek(const RRB *rrb) {
 // Note that this is very similar to the direct pop algorithm, which is
 // described further down in this file.
 static void promote_rightmost_leaf(RRB *new_rrb) {
-  // special case empty vector here?
-
-  const InternalNode *current = (const InternalNode *) new_rrb->root;
   InternalNode *path[RRB_MAX_HEIGHT+1];
-  path[0] = new_rrb->root;
+  path[0] = (InternalNode *) new_rrb->root;
   uint32_t i = 0, shift = LEAF_NODE_SHIFT;
 
   // populate path array
@@ -1018,7 +1006,7 @@ static void promote_rightmost_leaf(RRB *new_rrb) {
 
 static RRB* slice_right(const RRB *rrb, const uint32_t right) {
   if (right == 0) {
-    return rrb_create();
+    return (RRB *) rrb_create();
   }
   else if (right < rrb->cnt) {
     const uint32_t tail_offset = rrb->cnt - rrb->tail_len;

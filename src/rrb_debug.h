@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-typedef struct _DotArray {
+typedef struct {
   uint32_t len;
   uint32_t cap;
   const void **elems;
