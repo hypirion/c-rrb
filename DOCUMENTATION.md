@@ -166,7 +166,15 @@ Creates and opens a DotFile. Note that a DotFile is passed by value, not by
 pointer.
 
 If the opening of the file, as done by `fopen`, errors, then `errno` is set as
-by `fopen`.
+by `fopen`. Any call which writes to the file within this call is ignored; see
+`dot_file_create_safely` for a function which retains the error code for later
+inspection.
+
+```c
+DotFile dot_file_create_safely(char *fname, int* fprint_err)
+```
+As DotFile, but stores an `fprintf` return value inside `fprint_err` for later
+inspection.
 
 ```c
 int dot_file_close(DotFile dot)
@@ -174,7 +182,8 @@ int dot_file_close(DotFile dot)
 Writes and closes a DotFile to disk. Any call performed after the DotFile is
 closed is considered an error.
 
-The result of closing a DotFile is as `fclose`.
+The result of closing a DotFile is -1 if the remaining writing to the file
+fails, -2 if `fclose` fails, and -3 if both fails.
 
 ```c
 int rrb_to_dot(DotFile dot, const RRB *rrb)
