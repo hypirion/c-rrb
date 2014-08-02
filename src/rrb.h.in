@@ -74,6 +74,7 @@ typedef struct DotFile_ DotFile;
 int rrb_to_dot_file(const RRB *rrb, char *loch);
 
 DotFile dot_file_create(char *loch);
+DotFile dot_file_create_safely(char *loch, int* fprint_err);
 int dot_file_close(DotFile dot);
 
 int label_pointer(DotFile dot, const void *node, const char *name);
