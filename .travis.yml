@@ -1,0 +1,10 @@
+language: c
+before_install: sudo apt-get update
+install: sudo apt-get install libgc-dev libgc1c2
+script: ./run-tests.sh full && make distcheck
+compiler:
+  - clang
+  - gcc
+branches:
+  - development
+  - master
