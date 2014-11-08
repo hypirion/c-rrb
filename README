@@ -25,8 +25,14 @@ http://hypirion.com/thesis
 
 
 
-This library, unmodified, depends on automake tools and Boehm GC. On
-Debian-based distros, you can install the automake tools through:
+This library, unmodified, depends on automake tools and Boehm GC.
+
+On OSX (at least on Mavericks, presumably also on Yosemite), you can install
+automake tools and Boehm GC with Homebrew like this:
+
+  brew install boehmgc libtool
+
+On Debian-based distros, you can install the automake tools through:
 
   sudo apt-get install build-essential automake autoconf gnu-standards\
                        autoconf-doc libtool gettext autoconf-archive
